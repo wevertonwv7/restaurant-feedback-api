@@ -12,9 +12,9 @@ async function run() {
      VALUES ($1,$2,$3,$4)`,
     [
       randomUUID(),
-      "testeteste12@teste.com",
+      "teste@teste.com",
       passwordHash,
-      "20474766-7c9d-44d7-9e9e-60f15ef1d171"
+      "d37a9a60-d9a1-466f-b2b1-10eb8debd87b"
     ]
   );
 
