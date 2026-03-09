@@ -11,6 +11,7 @@ import feedbacks from "./routes/feedbacks";
 import birthdays from "./routes/birthdays";
 import me from "./routes/me";
 import restaurant from "./routes/restaurants";
+import customers from "./routes/customers"; 
 
 
 const app = new Hono<{ Variables: Variables }>();
@@ -37,6 +38,7 @@ app.route("/api/feedbacks", feedbacks);
 app.route("/api/birthdays", birthdays);
 app.route("/api/me", me);
 app.route("/api/restaurant", restaurant);
+app.route("/api/customers", customers);
 
 const port = 3000;
 

@@ -67,6 +67,7 @@ WHERE u.email = $1`,
         email: user.email,
         restaurant_name: restaurant.name,
         restaurant_slug: restaurant.slug,
+        restaurant_plan: user.restaurant_plan
       },
     });
   } catch (error) {

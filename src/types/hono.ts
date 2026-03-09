@@ -3,6 +3,7 @@ export type Variables = {
     id: string;
     email: string;
     restaurant_id: string;
+    restaurant_slug: string;
 
   };
 };
