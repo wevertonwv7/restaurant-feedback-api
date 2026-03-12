@@ -72,6 +72,8 @@ feedback.post("/", async (c) => {
 
     const feedbackSaved = feedbackResult.rows[0];
 
+    console.log("Feedback salvo:", feedbackSaved);
+
     // 3️⃣ Lógica de retorno
     let response: any = {
       success: true,
