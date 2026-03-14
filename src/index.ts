@@ -12,6 +12,9 @@ import me from "./routes/me";
 import restaurant from "./routes/restaurants";
 import customers from "./routes/customers";
 import metrics from "./routes/metrics";
+import attendants from "./routes/attendants";
+import attendantRatings from "./routes/attendant-ratings"; 
+import reports from "./routes/reports"; 
 
 const app = new Hono<{ Variables: Variables }>();
 
@@ -37,6 +40,9 @@ app.route("/api/me", me);
 app.route("/api/restaurant", restaurant);
 app.route("/api/customers", customers);
 app.route("/api/metrics", metrics);
+app.route("/api/attendants", attendants);
+app.route("/api/attendant-ratings", attendantRatings);
+app.route("/api/reports", reports);
 
 const port = 3000;
 

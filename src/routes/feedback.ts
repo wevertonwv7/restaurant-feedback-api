@@ -4,7 +4,6 @@ import type { Variables } from "../types/hono";
 
 const feedback = new Hono<{ Variables: Variables }>();
 
-
 feedback.post("/", async (c) => {
   try {
     const body = await c.req.json();
@@ -17,7 +16,12 @@ feedback.post("/", async (c) => {
       tempo_espera,
       custo_beneficio,
       nps,
-      comment
+      comment,
+
+      // 🆕 novos campos opcionais
+      attendant_id,
+      attendant_rating,
+      attendant_comment
     } = body;
 
     if (!restaurant_slug || !customer_id) {
@@ -74,7 +78,29 @@ feedback.post("/", async (c) => {
 
     console.log("Feedback salvo:", feedbackSaved);
 
-    // 3️⃣ Lógica de retorno
+    // 🆕 3️⃣ Salvar avaliação do atendente (se enviada)
+    if (attendant_id && attendant_rating) {
+      await pool.query(
+        `INSERT INTO attendant_ratings
+        (
+          feedback_id,
+          attendant_id,
+          customer_id,
+          rating,
+          comment
+        )
+        VALUES ($1,$2,$3,$4,$5)`,
+        [
+          feedbackSaved.id,
+          attendant_id,
+          customer_id,
+          attendant_rating,
+          attendant_comment || null
+        ]
+      );
+    }
+
+    // 4️⃣ Lógica de retorno
     let response: any = {
       success: true,
       feedback: feedbackSaved,
@@ -103,4 +129,5 @@ feedback.post("/", async (c) => {
     return c.json({ error: "Erro ao salvar feedback" }, 500);
   }
 });
+
 export default feedback;
