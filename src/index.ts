@@ -16,8 +16,11 @@ import attendants from "./routes/attendants";
 import attendantRatings from "./routes/attendant-ratings"; 
 import reports from "./routes/reports"; 
 import whatsapp from "./routes/whatsapp";
+import { whatsappWorker } from "./workers/whatsappSender";
 
 const app = new Hono<{ Variables: Variables }>();
+
+
 
 app.use(
   "*",
@@ -45,6 +48,12 @@ app.route("/api/attendants", attendants);
 app.route("/api/attendant-ratings", attendantRatings);
 app.route("/api/reports", reports); 
 app.route("/api/whatsapp", whatsapp);
+
+
+// 🚀 inicia worker sem quebrar o server
+whatsappWorker().catch((err) => {
+  console.error("Erro no worker:", err);
+});
 
 const port = 3000;
 

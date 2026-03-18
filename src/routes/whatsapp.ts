@@ -72,5 +72,104 @@ whatsapp.get("/qr", authMiddleware, async (c) => {
 
 });
 
+whatsapp.post("/send", authMiddleware, async (c) => {
+
+  const user = c.get("user");
+  const { phone, message } = await c.req.json();
+
+  const result = await pool.query(
+    `
+    INSERT INTO whatsapp_messages
+    (restaurant_id, phone, message)
+    VALUES ($1,$2,$3)
+    RETURNING *
+    `,
+    [user.restaurant_id, phone, message]
+  );
+
+  return c.json(result.rows[0]);
+
+});
+
+whatsapp.post("/campaign", authMiddleware, async (c) => {
+  const user = c.get("user");
+
+  if (!user) {
+    return c.json({ error: "Usuário não autenticado" }, 401);
+  }
+
+  const { message, filter } = await c.req.json();
+
+  if (!message) {
+    return c.json({ error: "Mensagem é obrigatória" }, 400);
+  }
+
+  try {
+
+    // 1️⃣ buscar clientes com filtro
+    let customersQuery = `
+      SELECT DISTINCT c.id, c.name, c.phone
+      FROM customers c
+      LEFT JOIN feedbacks f ON f.customer_id = c.id
+      WHERE c.restaurant_id = $1
+    `;
+
+    if (filter === "recent") {
+      customersQuery += `
+        AND c.created_at >= NOW() - INTERVAL '30 days'
+      `;
+    }
+
+    if (filter === "detractors") {
+      customersQuery += `
+        AND f.nps <= 6
+      `;
+    }
+
+    if (filter === "with_feedback") {
+      customersQuery += `
+        AND f.comment IS NOT NULL
+      `;
+    }
+
+    const customers = await pool.query(customersQuery, [
+      user.restaurant_id
+    ]);
+
+    // 2️⃣ inserir mensagens na fila
+    for (const customer of customers.rows) {
+
+      const personalizedMessage = message.replace(
+        "{{name}}",
+        customer.name || ""
+      );
+
+      await pool.query(
+        `
+        INSERT INTO whatsapp_messages
+        (restaurant_id, customer_id, phone, message)
+        VALUES ($1, $2, $3, $4)
+        `,
+        [
+          user.restaurant_id,
+          customer.id,
+          customer.phone,
+          personalizedMessage
+        ]
+      );
+    }
+
+    return c.json({
+      success: true,
+      total: customers.rows.length
+    });
+
+  } catch (err: any) {
+    console.error("Erro ao criar campanha:", err);
+
+    return c.json({ error: "Erro ao criar campanha" }, 500);
+  }
+});
+
 
 export default whatsapp;
