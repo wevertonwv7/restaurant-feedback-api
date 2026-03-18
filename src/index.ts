@@ -15,6 +15,7 @@ import metrics from "./routes/metrics";
 import attendants from "./routes/attendants";
 import attendantRatings from "./routes/attendant-ratings"; 
 import reports from "./routes/reports"; 
+import whatsapp from "./routes/whatsapp";
 
 const app = new Hono<{ Variables: Variables }>();
 
@@ -42,7 +43,8 @@ app.route("/api/customers", customers);
 app.route("/api/metrics", metrics);
 app.route("/api/attendants", attendants);
 app.route("/api/attendant-ratings", attendantRatings);
-app.route("/api/reports", reports);
+app.route("/api/reports", reports); 
+app.route("/api/whatsapp", whatsapp);
 
 const port = 3000;
 
