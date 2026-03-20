@@ -17,6 +17,10 @@ import attendantRatings from "./routes/attendant-ratings";
 import reports from "./routes/reports"; 
 import whatsapp from "./routes/whatsapp";
 import { whatsappWorker } from "./workers/whatsappSender";
+import { birthdayWorker } from "./workers/birthdayWorker";
+import { processCampaigns } from "./modules/whatsapp/campaigns"; 
+import campaigns from "./routes/campaigns";
+import { campaignWorker } from "./workers/campaignWorker";
 
 const app = new Hono<{ Variables: Variables }>();
 
@@ -48,12 +52,23 @@ app.route("/api/attendants", attendants);
 app.route("/api/attendant-ratings", attendantRatings);
 app.route("/api/reports", reports); 
 app.route("/api/whatsapp", whatsapp);
+app.route("/api/campaigns", campaigns);
+
 
 
 // 🚀 inicia worker sem quebrar o server
 whatsappWorker().catch((err) => {
   console.error("Erro no worker:", err);
 });
+
+// 🚀 inicia worker birthdayWorker sem quebrar o server
+
+// birthdayWorker().catch((err) => {
+ // console.error("Erro no birthday worker:", err);
+//});
+
+// 🚀 inicia worker sem quebrar o server
+campaignWorker().catch(console.error);
 
 const port = 3000;
 

@@ -132,6 +132,13 @@ whatsapp.post("/campaign", authMiddleware, async (c) => {
       `;
     }
 
+    if (filter === "birthdate") {
+  customersQuery += `
+    AND EXTRACT(DAY FROM c.birth_date) = EXTRACT(DAY FROM NOW())
+    AND EXTRACT(MONTH FROM c.birth_date) = EXTRACT(MONTH FROM NOW())
+  `;
+    }
+
     const customers = await pool.query(customersQuery, [
       user.restaurant_id
     ]);
@@ -168,6 +175,76 @@ whatsapp.post("/campaign", authMiddleware, async (c) => {
     console.error("Erro ao criar campanha:", err);
 
     return c.json({ error: "Erro ao criar campanha" }, 500);
+  }
+});
+
+whatsapp.post("/automation/birthday", authMiddleware, async (c) => {
+  const user = c.get("user");
+
+  if (!user) {
+    return c.json({ error: "Usuário não autenticado" }, 401);
+  }
+
+  const { message, active, title } = await c.req.json();
+
+  if (!message || !title) {
+    return c.json({ error: "Título e mensagem são obrigatórios" }, 400);
+  }
+
+  try {
+    await pool.query(
+      `
+      INSERT INTO whatsapp_automations 
+      (restaurant_id, type, title, message, active)
+      VALUES ($1, 'birthday', $2, $3, $4)
+      ON CONFLICT (restaurant_id, type)
+      DO UPDATE SET 
+        title = $2,
+        message = $3,
+        active = $4
+      `,
+      [user.restaurant_id, title, message, active]
+    );
+
+    return c.json({ success: true });
+
+  } catch (err) {
+    console.error("Erro ao salvar automação:", err);
+    return c.json({ error: "Erro ao salvar automação" }, 500);
+  }
+});
+
+
+whatsapp.get("/automation", authMiddleware, async (c) => {
+  const user = c.get("user");
+
+  if (!user) {
+    return c.json({ error: "Usuário não autenticado" }, 401);
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT 
+        id,
+        type,
+        title,
+        message,
+        active,
+        last_sent_at,
+        created_at
+      FROM whatsapp_automations
+      WHERE restaurant_id = $1
+      ORDER BY created_at DESC
+      `,
+      [user.restaurant_id]
+    );
+
+    return c.json(result.rows);
+
+  } catch (err) {
+    console.error("Erro ao buscar automações:", err);
+    return c.json({ error: "Erro ao buscar automações" }, 500);
   }
 });
 
