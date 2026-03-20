@@ -19,6 +19,8 @@ customers.post("/", async (c) => {
     } = body
 
     console.log(body)
+    const phoneAtualizado = '55'+phone
+    console.log("Numero atualizado:", phoneAtualizado )
 
     if (!restaurant_slug || !phone || !consent_lgpd) {
       return c.json({ error: "Dados obrigatórios faltando" }, 400)
@@ -41,7 +43,7 @@ customers.post("/", async (c) => {
     const customerResult = await pool.query(
       `SELECT id FROM customers
        WHERE phone = $1 AND restaurant_id = $2`,
-      [phone, restaurant_id]
+      [phoneAtualizado, restaurant_id]
     )
 
     let customer_id
@@ -64,7 +66,7 @@ customers.post("/", async (c) => {
           uuidv4(),
           restaurant_id,
           name,
-          phone,
+          phoneAtualizado,
           birthdate,
           consent_lgpd
         ]

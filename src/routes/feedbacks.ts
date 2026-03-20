@@ -18,11 +18,13 @@ feedbacks.get("/", authMiddleware, async (c) => {
   const limit = Number(c.req.query("limit") || 10);
   const offset = (page - 1) * limit;
 
-    const period = c.req.query("period");
+  const period = c.req.query("period");
   const startDate = c.req.query("start_date");
   const endDate = c.req.query("end_date");
 
-  let dateFilter = "";
+  // DEFAULT = mês atual
+  let dateFilter = "AND f.created_at >= DATE_TRUNC('month', NOW())";
+
   const params: any[] = [user.restaurant_id];
 
   if (period === "1m") {
