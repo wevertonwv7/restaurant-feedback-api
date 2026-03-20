@@ -1,0 +1,61 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.whatsappWorker = whatsappWorker;
+const client_1 = require("../db/client");
+const sendMessage_1 = require("../modules/whatsapp/sendMessage");
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+async function whatsappWorker() {
+    console.log("🚀 Worker iniciado");
+    while (true) {
+        const messages = await client_1.pool.query(`
+      SELECT wm.*, wi.zapi_instance_id, wi.zapi_token
+      FROM whatsapp_messages wm
+      JOIN whatsapp_instances wi
+        ON wi.restaurant_id = wm.restaurant_id
+      WHERE wm.status = 'pending'
+      LIMIT 5
+      `);
+        for (const msg of messages.rows) {
+            try {
+                console.log("📤 Enviando mensagem:", {
+                    id: msg.id,
+                    phone: msg.phone,
+                });
+                await client_1.pool.query(`UPDATE whatsapp_messages SET status = 'sending' WHERE id = $1`, [msg.id]);
+                const result = await (0, sendMessage_1.sendWhatsAppMessage)(msg.zapi_instance_id, msg.zapi_token, msg.phone, msg.message, msg.delay_message = 5);
+                if (result.success) {
+                    console.log("✅ Mensagem enviada:", result.data);
+                    await client_1.pool.query(`
+        UPDATE whatsapp_messages
+        SET status = 'sent', sent_at = NOW()
+        WHERE id = $1
+        `, [msg.id]);
+                }
+                else {
+                    console.error("❌ Erro ao enviar mensagem:", {
+                        id: msg.id,
+                        error: result.error
+                    });
+                    await client_1.pool.query(`
+        UPDATE whatsapp_messages
+        SET status = 'error', error = $2
+        WHERE id = $1
+        `, [msg.id, JSON.stringify(result.error)]);
+                }
+                await delay(8000);
+            }
+            catch (err) {
+                console.error("💥 Erro inesperado no worker:", err);
+                await client_1.pool.query(`
+      UPDATE whatsapp_messages
+      SET status = 'error', error = $2
+      WHERE id = $1
+      `, [msg.id, err.message]);
+            }
+        }
+        // espera antes de buscar mais
+        await delay(5000);
+    }
+}
