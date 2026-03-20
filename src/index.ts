@@ -21,6 +21,10 @@ import { birthdayWorker } from "./workers/birthdayWorker";
 import { processCampaigns } from "./modules/whatsapp/campaigns"; 
 import campaigns from "./routes/campaigns";
 import { campaignWorker } from "./workers/campaignWorker";
+import billing from "./routes/billing";
+import webhook from "./routes/webhook";
+
+
 
 const app = new Hono<{ Variables: Variables }>();
 
@@ -53,8 +57,8 @@ app.route("/api/attendant-ratings", attendantRatings);
 app.route("/api/reports", reports); 
 app.route("/api/whatsapp", whatsapp);
 app.route("/api/campaigns", campaigns);
-
-
+app.route("/api/billing", billing);
+app.route("/api/webhook", webhook);
 
 // 🚀 inicia worker sem quebrar o server
 whatsappWorker().catch((err) => {
@@ -70,8 +74,7 @@ whatsappWorker().catch((err) => {
 // 🚀 inicia worker sem quebrar o server
 campaignWorker().catch(console.error);
 
-const port = 3000;
-
+const port = Number(process.env.PORT) || 3000;
 console.log(`Servidor rodando em http://localhost:${port}`);
 
 serve({
