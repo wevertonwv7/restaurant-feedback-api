@@ -44,6 +44,8 @@ app.get("/", (c) => {
   return c.json({ message: "API funcionando 🚀" });
 });
 
+console.log("DATABASE_URL:", process.env.DATABASE_URL);
+
 app.route("/api/auth", auth);
 app.route("/api/feedback", feedback);
 app.route("/api/feedbacks", feedbacks);
