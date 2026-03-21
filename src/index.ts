@@ -22,7 +22,7 @@ import { processCampaigns } from "./modules/whatsapp/campaigns";
 import campaigns from "./routes/campaigns";
 import { campaignWorker } from "./workers/campaignWorker";
 import billing from "./routes/billing";
-import webhook from "./routes/webhook";
+//import webhook from "./routes/webhook";
 
 
 
@@ -58,7 +58,7 @@ app.route("/api/reports", reports);
 app.route("/api/whatsapp", whatsapp);
 app.route("/api/campaigns", campaigns);
 app.route("/api/billing", billing);
-app.route("/api/webhook", webhook);
+//app.route("/api/webhook", webhook);
 
 // 🚀 inicia worker sem quebrar o server
 whatsappWorker().catch((err) => {

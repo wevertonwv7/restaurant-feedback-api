@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+/* import { Hono } from "hono";
 import { stripe } from "../lib/stripe";
 import { pool } from "../db/client";
 
@@ -40,4 +40,4 @@ app.post("/", async (c) => {
   return c.text("ok");
 });
 
-export default app;
+export default app; */
