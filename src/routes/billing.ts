@@ -116,8 +116,8 @@ const session = await stripe.checkout.sessions.create({
       quantity: 1,
     },
   ],
-  success_url: "http://localhost:8080/success",
-  cancel_url: "http://localhost:8080/cancel",
+  success_url: "https://savor-spot-score.lovable.app/checkout/success",
+  cancel_url: "https://savor-spot-score.lovable.app/checkout/cancel",
 });
 
   return c.json({ url: session.url });
