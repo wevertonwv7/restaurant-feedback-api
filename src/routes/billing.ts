@@ -1,33 +1,65 @@
-/* import { Hono } from "hono";
+import { Hono } from "hono";
 import { stripe } from "../lib/stripe";
+import { pool } from "../db/client";
 
 const app = new Hono();
 
-app.post("/checkout", async (c) => {
-  const body = await c.req.json();
-  const { restaurantId, email } = body;
+app.post("/create-customer", async (c) => {
+  const { restaurantId, email } = await c.req.json();
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    payment_method_types: ["card"],
-    customer_email: email,
-
-    line_items: [
-      {
-        price: "price_123abc456", // 🔥 seu price_id
-        quantity: 1,
-      },
-    ],
-
-    success_url: "http://localhost:5173/sucesso",
-    cancel_url: "http://localhost:5173/cancelado",
-
-    metadata: {
-      restaurantId,
-    },
+  const customer = await stripe.customers.create({
+    email,
   });
 
-  return c.json({ url: session.url });
+  await pool.query(
+    `
+    UPDATE restaurants
+    SET stripe_customer_id = $1
+    WHERE id = $2
+    `,
+    [customer.id, restaurantId]
+  );
+
+  return c.json(customer);
 });
 
-export default app; */
+
+app.post("/create-subscription", async (c) => {
+  const { restaurantId } = await c.req.json();
+
+  const result = await pool.query(
+    `SELECT stripe_customer_id FROM restaurants WHERE id = $1`,
+    [restaurantId]
+  );
+
+  const customerId = result.rows[0].stripe_customer_id;
+
+  const subscription = await stripe.subscriptions.create({
+    customer: customerId,
+    items: [
+      {
+        price: "prod_UBV751yfdqAmXb", // 🔥 seu price_id
+      },
+    ],
+    payment_behavior: "default_incomplete",
+    expand: ["latest_invoice.payment_intent"],
+  });
+
+  await pool.query(
+    `
+    UPDATE restaurants
+    SET stripe_subscription_id = $1,
+        subscription_status = $2
+    WHERE id = $3
+    `,
+    [subscription.id, subscription.status, restaurantId]
+  );
+
+  return c.json({
+    subscriptionId: subscription.id,
+    clientSecret:
+      subscription.latest_invoice?.payment_intent?.client_secret,
+  });
+});
+
+export default app;

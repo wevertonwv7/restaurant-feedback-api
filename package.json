@@ -4,8 +4,8 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-     "build": "node ./node_modules/typescript/bin/tsc",
-     "start": "node dist/index.js"
+    "build": "node ./node_modules/typescript/bin/tsc",
+    "start": "node dist/index.js"
   },
   "repository": {
     "type": "git",
@@ -30,9 +30,9 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.20.0",
     "slugify": "^1.6.8",
-    "uuid": "^13.0.0", 
-    "typescript": "^5.9.3"
-
+    "strip": "^3.0.0",
+    "typescript": "^5.9.3",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
