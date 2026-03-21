@@ -27,7 +27,7 @@ app.post("/create-customer", authMiddleware, async (c) => {
 });
 
 
-app.post("/create-subscription", authMiddleware, async (c) => {
+/* app.post("/create-subscription", authMiddleware, async (c) => {
   const { restaurantId } = await c.req.json();
 
   const result = await pool.query(
@@ -57,16 +57,52 @@ app.post("/create-subscription", authMiddleware, async (c) => {
     `,
     [subscription.id, subscription.status, restaurantId]
   );
-
-  // ✅ CORREÇÃO DE TIPAGEM
- const invoice = subscription.latest_invoice as Stripe.Invoice & {
-  payment_intent: Stripe.PaymentIntent;
+const invoice = subscription.latest_invoice as Stripe.Invoice & {
+  payment_intent?: Stripe.PaymentIntent;
 };
+
+if (!invoice.payment_intent) {
+  return c.json({
+    error: "PaymentIntent não foi criado",
+    subscriptionId: subscription.id,
+  }, 400);
+}
 
 return c.json({
   subscriptionId: subscription.id,
   clientSecret: invoice.payment_intent.client_secret,
+}); 
+});*/
+
+app.post("/create-checkout-session", authMiddleware, async (c) => {
+  const { restaurantId } = await c.req.json();
+
+  const result = await pool.query(
+    `SELECT stripe_customer_id FROM restaurants WHERE id = $1`,
+    [restaurantId]
+  );
+
+  const customerId = result.rows[0].stripe_customer_id;
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    payment_method_types: ["card"],
+    mode: "subscription",
+    line_items: [
+      {
+        price: "price_1TD87gCtpNRgw1mVQGwDcKxK",
+        quantity: 1,
+      },
+    ],
+    success_url: "http://localhost:8080/success",
+    cancel_url: "http://localhost:8080/cancel",
+  });
+
+  return c.json({ url: session.url });
 });
+
+app.get("/ping", (c) => {
+  return c.json({ ok: true });
 });
 
 export default app;

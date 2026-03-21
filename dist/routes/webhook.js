@@ -12,18 +12,25 @@ app.post("/", async (c) => {
         event = stripe_1.stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET);
     }
     catch (err) {
-        return c.text("Webhook error", 400);
+        return c.text("Erro webhook", 400);
     }
-    // 🎯 PAGAMENTO APROVADO
-    if (event.type === "checkout.session.completed") {
-        const session = event.data.object;
-        const restaurantId = session.metadata.restaurantId;
-        // 🔥 ATIVA PLANO NO BANCO
-        await client_1.pool.query(`
-      UPDATE restaurants
-      SET plan = 'pro'
-      WHERE id = $1
-      `, [restaurantId]);
+    switch (event.type) {
+        case "invoice.paid":
+            const invoice = event.data.object;
+            await client_1.pool.query(`
+        UPDATE restaurants
+        SET subscription_status = 'active'
+        WHERE stripe_customer_id = '${invoice.customer}'
+      `);
+            break;
+        case "invoice.payment_failed":
+            const failed = event.data.object;
+            await client_1.pool.query(`
+        UPDATE restaurants
+        SET subscription_status = 'past_due'
+        WHERE stripe_customer_id = '${failed.customer}'
+      `);
+            break;
     }
     return c.text("ok");
 });
