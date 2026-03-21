@@ -21,7 +21,7 @@ import { birthdayWorker } from "./workers/birthdayWorker";
 import { processCampaigns } from "./modules/whatsapp/campaigns"; 
 import campaigns from "./routes/campaigns";
 import { campaignWorker } from "./workers/campaignWorker";
-import billing from "./routes/billing";
+//import billing from "./routes/billing";
 //import webhook from "./routes/webhook";
 
 
@@ -57,7 +57,7 @@ app.route("/api/attendant-ratings", attendantRatings);
 app.route("/api/reports", reports); 
 app.route("/api/whatsapp", whatsapp);
 app.route("/api/campaigns", campaigns);
-app.route("/api/billing", billing);
+//app.route("/api/billing", billing);
 //app.route("/api/webhook", webhook);
 
 // 🚀 inicia worker sem quebrar o server
