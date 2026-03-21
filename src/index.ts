@@ -33,7 +33,7 @@ const app = new Hono<{ Variables: Variables }>();
 app.use(
   "*",
   cors({
-    origin: ["http://localhost:8080", "http://localhost:5173"],
+    origin: ["https://savor-spot-score.lovable.app"],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
