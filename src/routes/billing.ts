@@ -74,7 +74,10 @@ return c.json({
 });*/
 
 app.post("/create-checkout-session", async (c) => {
-  const { restaurantId } = await c.req.json();
+  const { restaurantId, plan } = await c.req.json() as {
+  restaurantId: string;
+  plan: "basic" | "pro" | "premium";
+};
 
   const result = await pool.query(
     `SELECT r.stripe_customer_id, u.email
@@ -104,15 +107,27 @@ if (!customerId) {
     `,
     [customerId, restaurantId]
   );
+
 }
 
+const PLANS = {
+  basic: "price_1TD87gCtpNRgw1mVQGwDcKxK",
+  pro: "price_1TDXRuCtpNRgw1mVouWYZyvK",
+  premium: "price_1TDXShCtpNRgw1mValNcRBRO",
+};
+
+const priceId = PLANS[plan];
+
+if (!priceId) {
+  return c.json({ error: "Plano inválido" }, 400);
+}
 const session = await stripe.checkout.sessions.create({
   customer: customerId,
   payment_method_types: ["card"],
   mode: "subscription",
   line_items: [
     {
-      price: "price_1TD87gCtpNRgw1mVQGwDcKxK",
+      price: priceId,
       quantity: 1,
     },
   ],
