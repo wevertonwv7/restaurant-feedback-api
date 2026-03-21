@@ -77,25 +77,48 @@ app.post("/create-checkout-session", async (c) => {
   const { restaurantId } = await c.req.json();
 
   const result = await pool.query(
-    `SELECT stripe_customer_id FROM restaurants WHERE id = $1`,
+    `SELECT r.stripe_customer_id, u.email
+    FROM restaurants r
+    JOIN users u ON u.restaurant_id = r.id
+    WHERE r.id = $1
+    LIMIT 1`,
     [restaurantId]
   );
 
-  const customerId = result.rows[0].stripe_customer_id;
+  let customerId = result.rows[0].stripe_customer_id;
+const email = result.rows[0].email;
 
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    payment_method_types: ["card"],
-    mode: "subscription",
-    line_items: [
-      {
-        price: "price_1TD87gCtpNRgw1mVQGwDcKxK",
-        quantity: 1,
-      },
-    ],
-    success_url: "http://localhost:8080/success",
-    cancel_url: "http://localhost:8080/cancel",
+// 🔥 se não tiver customer, cria um
+if (!customerId) {
+  const customer = await stripe.customers.create({
+    email: email,
   });
+
+  customerId = customer.id;
+
+  await pool.query(
+    `
+    UPDATE restaurants
+    SET stripe_customer_id = $1
+    WHERE id = $2
+    `,
+    [customerId, restaurantId]
+  );
+}
+
+const session = await stripe.checkout.sessions.create({
+  customer: customerId,
+  payment_method_types: ["card"],
+  mode: "subscription",
+  line_items: [
+    {
+      price: "price_1TD87gCtpNRgw1mVQGwDcKxK",
+      quantity: 1,
+    },
+  ],
+  success_url: "http://localhost:8080/success",
+  cancel_url: "http://localhost:8080/cancel",
+});
 
   return c.json({ url: session.url });
 });
