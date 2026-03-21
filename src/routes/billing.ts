@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+/* import { Hono } from "hono";
 import { stripe } from "../lib/stripe";
 
 const app = new Hono();
@@ -30,4 +30,4 @@ app.post("/checkout", async (c) => {
   return c.json({ url: session.url });
 });
 
-export default app;
+export default app; */
