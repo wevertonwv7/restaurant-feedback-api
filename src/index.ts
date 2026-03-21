@@ -33,7 +33,7 @@ const app = new Hono<{ Variables: Variables }>();
 app.use(
   "*",
   cors({
-    origin: ["*"],
+    origin: ["https://restaurant-feedback-api-production.up.railway.app"],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
