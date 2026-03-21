@@ -2,12 +2,11 @@ import { Hono } from "hono";
 import { stripe } from "../lib/stripe";
 import { pool } from "../db/client";
 import Stripe from "stripe";
-import { authMiddleware } from "../middleware/auth";
 
 
 const app = new Hono();
 
-app.post("/create-customer", authMiddleware, async (c) => {
+app.post("/create-customer", async (c) => {
   const { restaurantId, email } = await c.req.json();
 
   const customer = await stripe.customers.create({
@@ -74,7 +73,7 @@ return c.json({
 }); 
 });*/
 
-app.post("/create-checkout-session", authMiddleware, async (c) => {
+app.post("/create-checkout-session", async (c) => {
   const { restaurantId } = await c.req.json();
 
   const result = await pool.query(
