@@ -1,10 +1,13 @@
 import { Hono } from "hono";
 import { stripe } from "../lib/stripe";
 import { pool } from "../db/client";
+import Stripe from "stripe";
+import { authMiddleware } from "../middleware/auth";
+
 
 const app = new Hono();
 
-app.post("/create-customer", async (c) => {
+app.post("/create-customer", authMiddleware, async (c) => {
   const { restaurantId, email } = await c.req.json();
 
   const customer = await stripe.customers.create({
@@ -24,7 +27,7 @@ app.post("/create-customer", async (c) => {
 });
 
 
-app.post("/create-subscription", async (c) => {
+app.post("/create-subscription", authMiddleware, async (c) => {
   const { restaurantId } = await c.req.json();
 
   const result = await pool.query(
@@ -38,7 +41,7 @@ app.post("/create-subscription", async (c) => {
     customer: customerId,
     items: [
       {
-        price: "prod_UBV751yfdqAmXb", // 🔥 seu price_id
+        price: "price_1TD87gCtpNRgw1mVQGwDcKxK",
       },
     ],
     payment_behavior: "default_incomplete",
@@ -55,11 +58,15 @@ app.post("/create-subscription", async (c) => {
     [subscription.id, subscription.status, restaurantId]
   );
 
-  return c.json({
-    subscriptionId: subscription.id,
-    clientSecret:
-      subscription.latest_invoice?.payment_intent?.client_secret,
-  });
+  // ✅ CORREÇÃO DE TIPAGEM
+ const invoice = subscription.latest_invoice as Stripe.Invoice & {
+  payment_intent: Stripe.PaymentIntent;
+};
+
+return c.json({
+  subscriptionId: subscription.id,
+  clientSecret: invoice.payment_intent.client_secret,
+});
 });
 
 export default app;
