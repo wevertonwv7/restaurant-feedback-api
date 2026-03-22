@@ -25,21 +25,13 @@ function msUntilNextRun(hour: number, minute: number) {
 export async function campaignWorker() {
   console.log("🚀 Campaign Worker iniciado");
 
-  const HOUR_TO_RUN = 11;    // 🔥 hora desejada
-  const MINUTE_TO_RUN = 27 // 🔥 minuto desejado
-
   while (true) {
     try {
-      const waitTime = msUntilNextRun(HOUR_TO_RUN, MINUTE_TO_RUN);
-
-      console.log(
-        `⏳ Próxima execução em ${Math.round(waitTime / 1000 / 60)} minutos`
-      );
-
-      await delay(waitTime);
-
-      console.log("📢 Executando campanhas agora...");
+      console.log("📢 Processando campanhas...");
       await processCampaigns();
+
+      // roda a cada 5 minutos
+      await delay(5 * 60 * 1000);
 
     } catch (err) {
       console.error("❌ Erro no campaign worker:", err);
