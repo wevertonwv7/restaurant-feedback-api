@@ -141,6 +141,8 @@ export async function processCampaigns() {
         campaign.id,
         scheduledAt
       ]);
+
+      console.log('scheduledAt: ', scheduledAt, ' - send_time: ', campaign.send_time, ' - customer: ', customer.name); // DEBUG
     }
   }
 }
