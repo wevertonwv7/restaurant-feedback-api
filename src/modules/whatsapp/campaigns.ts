@@ -104,17 +104,11 @@ export async function processCampaigns() {
     WHERE active = true
   `);
 
-  console.log(`🔎 Encontradas ${campaigns.rows.length} campanhas ativas`);
-
   for (const campaign of campaigns.rows) {
 
     if (!isTodayValid(campaign.days_of_week)) continue;
 
-    console.log("📢 Rodando campanha:", campaign.title);
-
     const customers = await getCustomers(campaign);
-
-    console.log(`Encontrados ${customers.length} clientes`);
 
     for (const customer of customers) {
 
