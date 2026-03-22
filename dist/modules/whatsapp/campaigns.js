@@ -84,16 +84,12 @@ async function processCampaigns() {
     SELECT * FROM campaigns
     WHERE active = true
   `);
-    console.log(`🔎 Encontradas ${campaigns.rows.length} campanhas ativas`);
     for (const campaign of campaigns.rows) {
         // evita conflito com birthdayWorker
         // (campaign.target === "birthday") continue;
         if (!isTodayValid(campaign.days_of_week))
             continue;
-        console.log('Campanha: ', campaign.title, ' - Hoje é dia válido? ', isTodayValid(campaign.days_of_week));
-        console.log("📢 Rodando campanha:", campaign.title);
         const customers = await getCustomers(campaign);
-        console.log(`Encontrados ${customers.length} clientes para a campanha "${campaign.title}"`);
         for (const customer of customers) {
             await client_1.pool.query(`
         INSERT INTO whatsapp_messages (
