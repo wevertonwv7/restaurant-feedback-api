@@ -3,9 +3,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const hono_1 = require("hono");
 const stripe_1 = require("../lib/stripe");
 const client_1 = require("../db/client");
+const auth_1 = require("../middleware/auth");
 const app = new hono_1.Hono();
+app.use("*", auth_1.authMiddleware);
 app.post("/create-customer", async (c) => {
-    const { restaurantId, email } = await c.req.json();
+    const user = c.get("user");
+    const { email } = await c.req.json();
+    if (!email) {
+        return c.json({ error: "Email é obrigatório" }, 400);
+    }
     const customer = await stripe_1.stripe.customers.create({
         email,
     });
@@ -13,7 +19,7 @@ app.post("/create-customer", async (c) => {
     UPDATE restaurants
     SET stripe_customer_id = $1
     WHERE id = $2
-    `, [customer.id, restaurantId]);
+    `, [customer.id, user.restaurant_id]);
     return c.json(customer);
 });
 /* app.post("/create-subscription", authMiddleware, async (c) => {
@@ -63,25 +69,32 @@ return c.json({
 });
 });*/
 app.post("/create-checkout-session", async (c) => {
-    const { restaurantId, plan } = await c.req.json();
+    const user = c.get("user");
+    const { plan } = await c.req.json();
+    if (!plan) {
+        return c.json({ error: "Plano é obrigatório" }, 400);
+    }
     const result = await client_1.pool.query(`SELECT r.stripe_customer_id, u.email
     FROM restaurants r
     JOIN users u ON u.restaurant_id = r.id
     WHERE r.id = $1
-    LIMIT 1`, [restaurantId]);
+    LIMIT 1`, [user.restaurant_id]);
+    if (result.rows.length === 0) {
+        return c.json({ error: "Restaurante não encontrado" }, 404);
+    }
     let customerId = result.rows[0].stripe_customer_id;
     const email = result.rows[0].email;
-    // 🔥 se não tiver customer, cria um
+    // Se não tiver customer, cria um
     if (!customerId) {
         const customer = await stripe_1.stripe.customers.create({
-            email: email,
+            email,
         });
         customerId = customer.id;
         await client_1.pool.query(`
-    UPDATE restaurants
-    SET stripe_customer_id = $1
-    WHERE id = $2
-    `, [customerId, restaurantId]);
+      UPDATE restaurants
+      SET stripe_customer_id = $1
+      WHERE id = $2
+      `, [customerId, user.restaurant_id]);
     }
     const PLANS = {
         basic: "price_1TD87gCtpNRgw1mVQGwDcKxK",
@@ -104,6 +117,10 @@ app.post("/create-checkout-session", async (c) => {
         ],
         success_url: "https://savor-spot-score.lovable.app/checkout/success",
         cancel_url: "https://savor-spot-score.lovable.app/checkout/cancel",
+        metadata: {
+            restaurant_id: user.restaurant_id,
+            requested_plan: plan,
+        },
     });
     return c.json({ url: session.url });
 });

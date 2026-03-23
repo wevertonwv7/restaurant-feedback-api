@@ -8,8 +8,6 @@ const birthdays = new Hono<{ Variables: Variables }>();
 
 birthdays.get("/", authMiddleware, async (c) => {
   try {
-
-    console.log(c.get("user"))
     const restaurant_id = c.get("user").restaurant_id;
 
     const result = await pool.query(

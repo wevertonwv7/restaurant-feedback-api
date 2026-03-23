@@ -1,14 +1,23 @@
 import { Hono } from "hono";
 import { pool } from "../db";
+import { authMiddleware } from "../middleware/auth";
+import type { Variables } from "../types/hono";
 
-const attendantRatings = new Hono();
+const attendantRatings = new Hono<{ Variables: Variables }>();
+
+attendantRatings.use("*", authMiddleware);
 
 /**
  * Dashboard - média por atendente
  */
 attendantRatings.get("/summary/:restaurant_id", async (c) => {
   try {
+    const user = c.get("user");
     const { restaurant_id } = c.req.param();
+
+    if (restaurant_id !== user.restaurant_id) {
+      return c.json({ error: "Acesso negado" }, 403);
+    }
 
     const result = await pool.query(
       `
@@ -48,7 +57,12 @@ attendantRatings.get("/summary/:restaurant_id", async (c) => {
  */
 attendantRatings.get("/reviews/:restaurant_id", async (c) => {
   try {
+    const user = c.get("user");
     const { restaurant_id } = c.req.param();
+
+    if (restaurant_id !== user.restaurant_id) {
+      return c.json({ error: "Acesso negado" }, 403);
+    }
 
     const page = Number(c.req.query("page") || 1);
     const limit = Number(c.req.query("limit") || 10);

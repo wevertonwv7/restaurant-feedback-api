@@ -7,7 +7,6 @@ exports.sendWhatsAppMessage = sendWhatsAppMessage;
 const axios_1 = __importDefault(require("axios"));
 async function sendWhatsAppMessage(instanceId, token, phone, message, delayMessage) {
     try {
-        console.log("Enviando mensagem para WhatsApp:", { phone, message });
         const response = await axios_1.default.post(`https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`, {
             phone,
             message,
@@ -17,7 +16,6 @@ async function sendWhatsAppMessage(instanceId, token, phone, message, delayMessa
                 "Client-Token": process.env.ZAPI_CLIENT_TOKEN
             }
         });
-        console.log("Resposta da API do WhatsApp:", response.data);
         return { success: true, data: response.data };
     }
     catch (error) {

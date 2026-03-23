@@ -9,6 +9,9 @@ const bcrypt_1 = __importDefault(require("bcrypt"));
 const crypto_1 = require("crypto");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const auth = new hono_1.Hono();
+function hashRefreshToken(token) {
+    return (0, crypto_1.createHash)("sha256").update(token).digest("hex");
+}
 auth.post("/login", async (c) => {
     try {
         const body = await c.req.json();
@@ -46,8 +49,9 @@ auth.post("/login", async (c) => {
         // Gera token JWT
         const access_token = jsonwebtoken_1.default.sign({ id: user.id, restaurant_id: user.restaurant_id }, process.env.JWT_SECRET, { expiresIn: "15m" });
         const refreshToken = (0, crypto_1.randomBytes)(64).toString("hex");
+        const refreshTokenHash = hashRefreshToken(refreshToken);
         await client_1.pool.query(`INSERT INTO refresh_tokens (user_id, token, expires_at)
-     VALUES ($1,$2,NOW() + INTERVAL '1 days')`, [user.id, refreshToken]);
+     VALUES ($1,$2,NOW() + INTERVAL '1 days')`, [user.id, refreshTokenHash]);
         // Retorna contrato esperado pelo Lovable
         return c.json({
             access_token,
@@ -72,10 +76,11 @@ auth.post("/logout", async (c) => {
         if (!refreshToken) {
             return c.json({ error: "Refresh token obrigatório" }, 400);
         }
+        const refreshTokenHash = hashRefreshToken(refreshToken);
         await client_1.pool.query(`
       DELETE FROM refresh_tokens
-      WHERE token = $1
-      `, [refreshToken]);
+      WHERE token = $1 OR token = $2
+      `, [refreshTokenHash, refreshToken]);
         return c.json({
             message: "Logout realizado com sucesso"
         });
@@ -91,13 +96,13 @@ auth.post("/refresh", async (c) => {
         if (!refreshToken) {
             return c.json({ error: "Refresh token obrigatório" }, 400);
         }
+        const refreshTokenHash = hashRefreshToken(refreshToken);
         const tokenResult = await client_1.pool.query(`
-      SELECT user_id
+      SELECT user_id, token
       FROM refresh_tokens
-      WHERE token = $1
+      WHERE (token = $1 OR token = $2)
       AND expires_at > NOW()
-      `, [refreshToken]);
-        console.log("Resultado do token:", tokenResult.rows);
+      `, [refreshTokenHash, refreshToken]);
         if (tokenResult.rows.length === 0) {
             return c.json({ error: "Refresh token inválido ou expirado" }, 401);
         }
@@ -116,13 +121,20 @@ auth.post("/refresh", async (c) => {
             return c.json({ error: "Usuário não encontrado" }, 404);
         }
         const user = result.rows[0];
+        const newRefreshToken = (0, crypto_1.randomBytes)(64).toString("hex");
+        const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
+        await client_1.pool.query(`
+      UPDATE refresh_tokens
+      SET token = $1, expires_at = NOW() + INTERVAL '1 days'
+      WHERE token = $2
+      `, [newRefreshTokenHash, tokenResult.rows[0].token]);
         const access_token = jsonwebtoken_1.default.sign({
             id: user.id,
             restaurant_id: user.restaurant_id
         }, process.env.JWT_SECRET, { expiresIn: "15m" });
         return new Response(JSON.stringify({
             access_token,
-            refreshToken,
+            refreshToken: newRefreshToken,
             user: {
                 id: user.id,
                 email: user.email,

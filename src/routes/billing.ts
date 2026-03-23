@@ -2,12 +2,20 @@ import { Hono } from "hono";
 import { stripe } from "../lib/stripe";
 import { pool } from "../db/client";
 import Stripe from "stripe";
+import { authMiddleware } from "../middleware/auth";
+import type { Variables } from "../types/hono";
 
+const app = new Hono<{ Variables: Variables }>();
 
-const app = new Hono();
+app.use("*", authMiddleware);
 
 app.post("/create-customer", async (c) => {
-  const { restaurantId, email } = await c.req.json();
+  const user = c.get("user");
+  const { email } = await c.req.json();
+
+  if (!email) {
+    return c.json({ error: "Email é obrigatório" }, 400);
+  }
 
   const customer = await stripe.customers.create({
     email,
@@ -19,7 +27,7 @@ app.post("/create-customer", async (c) => {
     SET stripe_customer_id = $1
     WHERE id = $2
     `,
-    [customer.id, restaurantId]
+    [customer.id, user.restaurant_id]
   );
 
   return c.json(customer);
@@ -74,10 +82,14 @@ return c.json({
 });*/
 
 app.post("/create-checkout-session", async (c) => {
-  const { restaurantId, plan } = await c.req.json() as {
-  restaurantId: string;
-  plan: "basic" | "pro" | "premium";
-};
+  const user = c.get("user");
+  const { plan } = await c.req.json() as {
+    plan: "basic" | "pro" | "premium";
+  };
+
+  if (!plan) {
+    return c.json({ error: "Plano é obrigatório" }, 400);
+  }
 
   const result = await pool.query(
     `SELECT r.stripe_customer_id, u.email
@@ -85,55 +97,63 @@ app.post("/create-checkout-session", async (c) => {
     JOIN users u ON u.restaurant_id = r.id
     WHERE r.id = $1
     LIMIT 1`,
-    [restaurantId]
+    [user.restaurant_id]
   );
+
+  if (result.rows.length === 0) {
+    return c.json({ error: "Restaurante não encontrado" }, 404);
+  }
 
   let customerId = result.rows[0].stripe_customer_id;
-const email = result.rows[0].email;
+  const email = result.rows[0].email;
 
-// 🔥 se não tiver customer, cria um
-if (!customerId) {
-  const customer = await stripe.customers.create({
-    email: email,
-  });
+  // Se não tiver customer, cria um
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email,
+    });
 
-  customerId = customer.id;
+    customerId = customer.id;
 
-  await pool.query(
-    `
-    UPDATE restaurants
-    SET stripe_customer_id = $1
-    WHERE id = $2
-    `,
-    [customerId, restaurantId]
-  );
+    await pool.query(
+      `
+      UPDATE restaurants
+      SET stripe_customer_id = $1
+      WHERE id = $2
+      `,
+      [customerId, user.restaurant_id]
+    );
+  }
 
-}
+  const PLANS = {
+    basic: "price_1TD87gCtpNRgw1mVQGwDcKxK",
+    pro: "price_1TDXRuCtpNRgw1mVouWYZyvK",
+    premium: "price_1TDXShCtpNRgw1mValNcRBRO",
+  };
 
-const PLANS = {
-  basic: "price_1TD87gCtpNRgw1mVQGwDcKxK",
-  pro: "price_1TDXRuCtpNRgw1mVouWYZyvK",
-  premium: "price_1TDXShCtpNRgw1mValNcRBRO",
-};
+  const priceId = PLANS[plan];
 
-const priceId = PLANS[plan];
+  if (!priceId) {
+    return c.json({ error: "Plano inválido" }, 400);
+  }
 
-if (!priceId) {
-  return c.json({ error: "Plano inválido" }, 400);
-}
-const session = await stripe.checkout.sessions.create({
-  customer: customerId,
-  payment_method_types: ["card"],
-  mode: "subscription",
-  line_items: [
-    {
-      price: priceId,
-      quantity: 1,
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    payment_method_types: ["card"],
+    mode: "subscription",
+    line_items: [
+      {
+        price: priceId,
+        quantity: 1,
+      },
+    ],
+    success_url: "https://savor-spot-score.lovable.app/checkout/success",
+    cancel_url: "https://savor-spot-score.lovable.app/checkout/cancel",
+    metadata: {
+      restaurant_id: user.restaurant_id,
+      requested_plan: plan,
     },
-  ],
-  success_url: "https://savor-spot-score.lovable.app/checkout/success",
-  cancel_url: "https://savor-spot-score.lovable.app/checkout/cancel",
-});
+  });
 
   return c.json({ url: session.url });
 });

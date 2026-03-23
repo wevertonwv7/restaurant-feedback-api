@@ -23,8 +23,6 @@ me.get("/", authMiddleware, async (c) => {
 
   const restaurant = result.rows[0];
 
-  console.log("Plano do restaurante:", restaurant);
-
   return c.json({
     user: {
       ...user,

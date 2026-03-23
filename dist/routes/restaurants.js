@@ -7,6 +7,7 @@ const hono_1 = require("hono");
 const client_1 = require("../db/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const slugify_1 = __importDefault(require("slugify"));
+const auth_1 = require("../middleware/auth");
 const restaurant = new hono_1.Hono();
 restaurant.get("/:slug", async (c) => {
     const slug = c.req.param("slug");
@@ -63,10 +64,17 @@ restaurant.post("/register", async (c) => {
         client.release();
     }
 });
-restaurant.post("/update-plan", async (c) => {
+restaurant.post("/update-plan", auth_1.authMiddleware, async (c) => {
+    const user = c.get("user");
     const { restaurantId, plan } = await c.req.json();
     if (!restaurantId || !plan) {
         return c.json({ error: "Dados inválidos" }, 400);
+    }
+    if (restaurantId !== user.restaurant_id) {
+        return c.json({ error: "Acesso negado" }, 403);
+    }
+    if (!["basic", "pro", "premium"].includes(plan)) {
+        return c.json({ error: "Plano inválido" }, 400);
     }
     await client_1.pool.query(`
     UPDATE restaurants

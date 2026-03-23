@@ -6,7 +6,6 @@ const auth_1 = require("../middleware/auth");
 const birthdays = new hono_1.Hono();
 birthdays.get("/", auth_1.authMiddleware, async (c) => {
     try {
-        console.log(c.get("user"));
         const restaurant_id = c.get("user").restaurant_id;
         const result = await client_1.pool.query(`
       SELECT

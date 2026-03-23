@@ -77,11 +77,16 @@ attendants.get("/", async (c) => {
 attendants.delete("/:id", async (c) => {
     try {
         const { id } = c.req.param();
-        await db_1.pool.query(`
+        const restaurant_id = c.get("user").restaurant_id;
+        const result = await db_1.pool.query(`
       UPDATE attendants
       SET active = false
       WHERE id = $1
-      `, [id]);
+      AND restaurant_id = $2
+      `, [id, restaurant_id]);
+        if (result.rowCount === 0) {
+            return c.json({ error: "Atendente não encontrado" }, 404);
+        }
         return c.json({ message: "Atendente desativado" });
     }
     catch (error) {

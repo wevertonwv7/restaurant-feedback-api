@@ -24,21 +24,27 @@ app.post("/", async (c) => {
     case "invoice.paid":
       const invoice = event.data.object;
 
-      await pool.query(`
+      await pool.query(
+        `
         UPDATE restaurants
         SET subscription_status = 'active'
-        WHERE stripe_customer_id = '${invoice.customer}'
-      `);
+        WHERE stripe_customer_id = $1
+      `,
+        [String(invoice.customer)]
+      );
       break;
 
     case "invoice.payment_failed":
       const failed = event.data.object;
 
-      await pool.query(`
+      await pool.query(
+        `
         UPDATE restaurants
         SET subscription_status = 'past_due'
-        WHERE stripe_customer_id = '${failed.customer}'
-      `);
+        WHERE stripe_customer_id = $1
+      `,
+        [String(failed.customer)]
+      );
       break;
   }
 

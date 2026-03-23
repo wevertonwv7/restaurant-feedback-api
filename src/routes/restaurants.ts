@@ -2,8 +2,10 @@ import { Hono } from "hono";
 import { pool } from "../db/client";
 import bcrypt from "bcrypt";
 import slugify from "slugify";
+import { authMiddleware } from "../middleware/auth";
+import type { Variables } from "../types/hono";
 
-const restaurant = new Hono();
+const restaurant = new Hono<{ Variables: Variables }>();
 
 restaurant.get("/:slug", async (c) => {
   const slug = c.req.param("slug");
@@ -97,11 +99,20 @@ restaurant.post("/register", async (c) => {
   }
 });
 
-restaurant.post("/update-plan", async (c) => {
+restaurant.post("/update-plan", authMiddleware, async (c) => {
+  const user = c.get("user");
   const { restaurantId, plan } = await c.req.json();
 
   if (!restaurantId || !plan) {
     return c.json({ error: "Dados inválidos" }, 400);
+  }
+
+  if (restaurantId !== user.restaurant_id) {
+    return c.json({ error: "Acesso negado" }, 403);
+  }
+
+  if (!["basic", "pro", "premium"].includes(plan)) {
+    return c.json({ error: "Plano inválido" }, 400);
   }
 
   await pool.query(

@@ -26,7 +26,10 @@ const billing_1 = __importDefault(require("./routes/billing"));
 const webhook_1 = __importDefault(require("./routes/webhook"));
 const app = new hono_1.Hono();
 app.use((0, cors_1.cors)({
-    origin: ["https://savor-spot-score.lovable.app"],
+    origin: [
+        "https://savor-spot-score.lovable.app",
+        "http://localhost:8080",
+    ],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
@@ -34,7 +37,6 @@ app.use((0, cors_1.cors)({
 app.get("/", (c) => {
     return c.json({ message: "API funcionando 🚀" });
 });
-console.log("DATABASE_URL:", process.env.DATABASE_URL);
 app.route("/api/auth", auth_1.default);
 app.route("/api/feedback", feedback_1.default);
 app.route("/api/feedbacks", feedbacks_1.default);

@@ -16,7 +16,6 @@ me.get("/", auth_1.authMiddleware, async (c) => {
   on r.ID = u.restaurant_id
   WHERE r.id = $1`, [user.restaurant_id]);
     const restaurant = result.rows[0];
-    console.log("Plano do restaurante:", restaurant);
     return c.json({
         user: {
             ...user,
