@@ -1,13 +1,18 @@
 import { Hono } from "hono";
 import { stripe } from "../lib/stripe";
 import { pool } from "../db/client";
-import Stripe from "stripe";
 import { authMiddleware } from "../middleware/auth";
 import type { Variables } from "../types/hono";
 
 const app = new Hono<{ Variables: Variables }>();
 
 app.use("*", authMiddleware);
+
+const STRIPE_PRICE_IDS = {
+  basic: process.env.STRIPE_PRICE_BASIC,
+  pro: process.env.STRIPE_PRICE_PRO,
+  premium: process.env.STRIPE_PRICE_PREMIUM,
+} as const;
 
 app.post("/create-customer", async (c) => {
   const user = c.get("user");
@@ -125,16 +130,10 @@ app.post("/create-checkout-session", async (c) => {
     );
   }
 
-  const PLANS = {
-    basic: "price_1TD87gCtpNRgw1mVQGwDcKxK",
-    pro: "price_1TDXRuCtpNRgw1mVouWYZyvK",
-    premium: "price_1TDXShCtpNRgw1mValNcRBRO",
-  };
-
-  const priceId = PLANS[plan];
+  const priceId = STRIPE_PRICE_IDS[plan];
 
   if (!priceId) {
-    return c.json({ error: "Plano inválido" }, 400);
+    return c.json({ error: "Price do plano não configurado" }, 500);
   }
 
   const session = await stripe.checkout.sessions.create({
