@@ -33,10 +33,8 @@ const app = new Hono<{ Variables: Variables }>();
 app.use(
   cors({
     origin: [
-      "https://savor-spot-score.lovable.app",
-      "http://localhost:8080",
-      "https://opinio-front.netlify.app",
       "http://opiniofeedbacks.com",
+      "https://opiniofeedbacks.com",
     ],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
