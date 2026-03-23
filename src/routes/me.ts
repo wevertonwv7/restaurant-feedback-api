@@ -26,7 +26,7 @@ me.get("/", authMiddleware, async (c) => {
   return c.json({
     user: {
       ...user,
-      plan: restaurant?.plan || "basic",// fallback
+      plan: restaurant?.plan,// fallback
       restaurant_slug: restaurant?.restaurant_slug,
       restaurant_id: user.restaurant_id,
       restaurant_name: restaurant.restaurant_name,
