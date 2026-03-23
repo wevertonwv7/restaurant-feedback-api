@@ -43,7 +43,7 @@ restaurant.post("/register", async (c) => {
         // cria restaurante
         const restaurantResult = await client.query(`INSERT INTO restaurants (name, slug, plan, google_review_url)
        VALUES ($1,$2,$3,$4)
-       RETURNING id, name, slug`, [name, slug, "basic", google_review_url || null]);
+       RETURNING id, name, slug`, [name, slug, null, google_review_url || null]);
         const restaurant = restaurantResult.rows[0];
         // cria usuário dono
         await client.query(`INSERT INTO users (restaurant_id, email, password_hash)
@@ -62,5 +62,17 @@ restaurant.post("/register", async (c) => {
     finally {
         client.release();
     }
+});
+restaurant.post("/update-plan", async (c) => {
+    const { restaurantId, plan } = await c.req.json();
+    if (!restaurantId || !plan) {
+        return c.json({ error: "Dados inválidos" }, 400);
+    }
+    await client_1.pool.query(`
+    UPDATE restaurants
+    SET plan = $1
+    WHERE id = $2
+    `, [plan, restaurantId]);
+    return c.json({ message: "Plano atualizado com sucesso" });
 });
 exports.default = restaurant;

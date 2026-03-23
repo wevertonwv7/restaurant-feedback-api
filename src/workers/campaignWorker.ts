@@ -31,7 +31,7 @@ export async function campaignWorker() {
       await processCampaigns();
 
       // roda a cada 5 minutos
-      await delay(5 * 60 * 1000);
+      await delay(1 * 60 * 1000);
 
     } catch (err) {
       console.error("❌ Erro no campaign worker:", err);

@@ -63,21 +63,47 @@ return c.json({
 });
 });*/
 app.post("/create-checkout-session", async (c) => {
-    const { restaurantId } = await c.req.json();
-    const result = await client_1.pool.query(`SELECT stripe_customer_id FROM restaurants WHERE id = $1`, [restaurantId]);
-    const customerId = result.rows[0].stripe_customer_id;
+    const { restaurantId, plan } = await c.req.json();
+    const result = await client_1.pool.query(`SELECT r.stripe_customer_id, u.email
+    FROM restaurants r
+    JOIN users u ON u.restaurant_id = r.id
+    WHERE r.id = $1
+    LIMIT 1`, [restaurantId]);
+    let customerId = result.rows[0].stripe_customer_id;
+    const email = result.rows[0].email;
+    // 🔥 se não tiver customer, cria um
+    if (!customerId) {
+        const customer = await stripe_1.stripe.customers.create({
+            email: email,
+        });
+        customerId = customer.id;
+        await client_1.pool.query(`
+    UPDATE restaurants
+    SET stripe_customer_id = $1
+    WHERE id = $2
+    `, [customerId, restaurantId]);
+    }
+    const PLANS = {
+        basic: "price_1TD87gCtpNRgw1mVQGwDcKxK",
+        pro: "price_1TDXRuCtpNRgw1mVouWYZyvK",
+        premium: "price_1TDXShCtpNRgw1mValNcRBRO",
+    };
+    const priceId = PLANS[plan];
+    if (!priceId) {
+        return c.json({ error: "Plano inválido" }, 400);
+    }
     const session = await stripe_1.stripe.checkout.sessions.create({
         customer: customerId,
         payment_method_types: ["card"],
         mode: "subscription",
         line_items: [
             {
-                price: "price_1TD87gCtpNRgw1mVQGwDcKxK",
+                price: priceId,
                 quantity: 1,
             },
         ],
-        success_url: "http://localhost:8080/success",
-        cancel_url: "http://localhost:8080/cancel",
+        success_url: "https://savor-spot-score.lovable.app/checkout/success",
+        cancel_url: "https://savor-spot-score.lovable.app/checkout/cancel",
     });
     return c.json({ url: session.url });
 });
