@@ -101,14 +101,10 @@ restaurant.post("/register", async (c) => {
 
 restaurant.post("/update-plan", authMiddleware, async (c) => {
   const user = c.get("user");
-  const { restaurantId, plan } = await c.req.json();
+  const { plan } = await c.req.json();
 
-  if (!restaurantId || !plan) {
+  if (!plan) {
     return c.json({ error: "Dados inválidos" }, 400);
-  }
-
-  if (restaurantId !== user.restaurant_id) {
-    return c.json({ error: "Acesso negado" }, 403);
   }
 
   if (!["basic", "pro", "premium"].includes(plan)) {
@@ -121,7 +117,7 @@ restaurant.post("/update-plan", authMiddleware, async (c) => {
     SET plan = $1
     WHERE id = $2
     `,
-    [plan, restaurantId]
+    [plan, user.restaurant_id]
   );
 
   return c.json({ message: "Plano atualizado com sucesso" });
