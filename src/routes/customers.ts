@@ -18,9 +18,7 @@ customers.post("/", async (c) => {
       consent_lgpd
     } = body
 
-    console.log(body)
     const phoneAtualizado = '55'+phone
-    console.log("Numero atualizado:", phoneAtualizado )
 
     if (!restaurant_slug || !phone || !consent_lgpd) {
       return c.json({ error: "Dados obrigatórios faltando" }, 400)

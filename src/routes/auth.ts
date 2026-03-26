@@ -1,10 +1,14 @@
 import { Hono } from "hono";
 import { pool } from "../db/client";
 import bcrypt from "bcrypt";
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import jwt from "jsonwebtoken";
 
 const auth = new Hono();
+
+function hashRefreshToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 auth.post("/login", async (c) => {
   try {
@@ -61,10 +65,11 @@ auth.post("/login", async (c) => {
     );
 
     const refreshToken = randomBytes(64).toString("hex");
+    const refreshTokenHash = hashRefreshToken(refreshToken);
     await pool.query(
     `INSERT INTO refresh_tokens (user_id, token, expires_at)
      VALUES ($1,$2,NOW() + INTERVAL '1 days')`,
-  [user.id, refreshToken]);
+  [user.id, refreshTokenHash]);
 
     // Retorna contrato esperado pelo Lovable
     return c.json({
@@ -93,12 +98,14 @@ auth.post("/logout", async (c) => {
       return c.json({ error: "Refresh token obrigatório" }, 400);
     }
 
+    const refreshTokenHash = hashRefreshToken(refreshToken);
+
     await pool.query(
       `
       DELETE FROM refresh_tokens
-      WHERE token = $1
+      WHERE token = $1 OR token = $2
       `,
-      [refreshToken]
+      [refreshTokenHash, refreshToken]
     );
 
     return c.json({
@@ -119,17 +126,17 @@ auth.post("/refresh", async (c) => {
       return c.json({ error: "Refresh token obrigatório" }, 400);
     }
 
+    const refreshTokenHash = hashRefreshToken(refreshToken);
+
     const tokenResult = await pool.query(
       `
-      SELECT user_id
+      SELECT user_id, token
       FROM refresh_tokens
-      WHERE token = $1
+      WHERE (token = $1 OR token = $2)
       AND expires_at > NOW()
       `,
-      [refreshToken]
+      [refreshTokenHash, refreshToken]
     );
-
-    console.log("Resultado do token:", tokenResult.rows);
 
     if (tokenResult.rows.length === 0) {
       return c.json({ error: "Refresh token inválido ou expirado" }, 401);
@@ -158,6 +165,18 @@ auth.post("/refresh", async (c) => {
 
     const user = result.rows[0];
 
+    const newRefreshToken = randomBytes(64).toString("hex");
+    const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
+
+    await pool.query(
+      `
+      UPDATE refresh_tokens
+      SET token = $1, expires_at = NOW() + INTERVAL '1 days'
+      WHERE token = $2
+      `,
+      [newRefreshTokenHash, tokenResult.rows[0].token]
+    );
+
     const access_token = jwt.sign(
       {
         id: user.id,
@@ -170,7 +189,7 @@ auth.post("/refresh", async (c) => {
 return new Response(
   JSON.stringify({
     access_token,
-    refreshToken,
+    refreshToken: newRefreshToken,
     user: {
       id: user.id,
       email: user.email,

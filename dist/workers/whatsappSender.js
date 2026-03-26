@@ -15,6 +15,7 @@ async function whatsappWorker() {
       JOIN whatsapp_instances wi
         ON wi.restaurant_id = wm.restaurant_id
       WHERE wm.status = 'pending'
+      AND (wm.scheduled_at IS NULL OR wm.scheduled_at <= NOW())
       LIMIT 5
       `);
         for (const msg of messages.rows) {

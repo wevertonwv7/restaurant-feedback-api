@@ -2,8 +2,10 @@ import { Hono } from "hono";
 import { pool } from "../db/client";
 import bcrypt from "bcrypt";
 import slugify from "slugify";
+import { authMiddleware } from "../middleware/auth";
+import type { Variables } from "../types/hono";
 
-const restaurant = new Hono();
+const restaurant = new Hono<{ Variables: Variables }>();
 
 restaurant.get("/:slug", async (c) => {
   const slug = c.req.param("slug");
@@ -63,7 +65,7 @@ restaurant.post("/register", async (c) => {
       `INSERT INTO restaurants (name, slug, plan, google_review_url)
        VALUES ($1,$2,$3,$4)
        RETURNING id, name, slug`,
-      [name, slug, "basic", google_review_url || null]
+      [name, slug, null, google_review_url || null]
     );
 
     const restaurant = restaurantResult.rows[0];
@@ -95,6 +97,30 @@ restaurant.post("/register", async (c) => {
   } finally {
     client.release();
   }
+});
+
+restaurant.post("/update-plan", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const { plan } = await c.req.json();
+
+  if (!plan) {
+    return c.json({ error: "Dados inválidos" }, 400);
+  }
+
+  if (!["basic", "pro", "premium"].includes(plan)) {
+    return c.json({ error: "Plano inválido" }, 400);
+  }
+
+  await pool.query(
+    `
+    UPDATE restaurants
+    SET plan = $1
+    WHERE id = $2
+    `,
+    [plan, user.restaurant_id]
+  );
+
+  return c.json({ message: "Plano atualizado com sucesso" });
 });
 
 export default restaurant;

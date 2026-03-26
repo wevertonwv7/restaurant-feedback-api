@@ -25,8 +25,12 @@ const campaignWorker_1 = require("./workers/campaignWorker");
 const billing_1 = __importDefault(require("./routes/billing"));
 const webhook_1 = __importDefault(require("./routes/webhook"));
 const app = new hono_1.Hono();
-app.use("*", (0, cors_1.cors)({
-    origin: ["http://localhost:8080", "http://localhost:5173"],
+app.use((0, cors_1.cors)({
+    origin: [
+        "https://savor-spot-score.lovable.app",
+        "http://opiniofeedbacks.com",
+        "https://opiniofeedbacks.com",
+    ],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,

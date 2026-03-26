@@ -45,7 +45,6 @@ feedback.post("/", async (c) => {
             comment
         ]);
         const feedbackSaved = feedbackResult.rows[0];
-        console.log("Feedback salvo:", feedbackSaved);
         // 🆕 3️⃣ Salvar avaliação do atendente (se enviada)
         if (attendant_id && attendant_rating) {
             await client_1.pool.query(`INSERT INTO attendant_ratings

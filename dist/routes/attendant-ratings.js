@@ -2,13 +2,19 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const hono_1 = require("hono");
 const db_1 = require("../db");
+const auth_1 = require("../middleware/auth");
 const attendantRatings = new hono_1.Hono();
+attendantRatings.use("*", auth_1.authMiddleware);
 /**
  * Dashboard - média por atendente
  */
 attendantRatings.get("/summary/:restaurant_id", async (c) => {
     try {
+        const user = c.get("user");
         const { restaurant_id } = c.req.param();
+        if (restaurant_id !== user.restaurant_id) {
+            return c.json({ error: "Acesso negado" }, 403);
+        }
         const result = await db_1.pool.query(`
       SELECT 
         a.id,
@@ -40,7 +46,11 @@ attendantRatings.get("/summary/:restaurant_id", async (c) => {
  */
 attendantRatings.get("/reviews/:restaurant_id", async (c) => {
     try {
+        const user = c.get("user");
         const { restaurant_id } = c.req.param();
+        if (restaurant_id !== user.restaurant_id) {
+            return c.json({ error: "Acesso negado" }, 403);
+        }
         const page = Number(c.req.query("page") || 1);
         const limit = Number(c.req.query("limit") || 10);
         const offset = (page - 1) * limit;

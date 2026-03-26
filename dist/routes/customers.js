@@ -8,9 +8,7 @@ customers.post("/", async (c) => {
     try {
         const body = await c.req.json();
         const { restaurant_slug, name, phone, birth_day, birth_month, consent_lgpd } = body;
-        console.log(body);
         const phoneAtualizado = '55' + phone;
-        console.log("Numero atualizado:", phoneAtualizado);
         if (!restaurant_slug || !phone || !consent_lgpd) {
             return c.json({ error: "Dados obrigatórios faltando" }, 400);
         }

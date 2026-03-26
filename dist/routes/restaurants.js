@@ -7,6 +7,7 @@ const hono_1 = require("hono");
 const client_1 = require("../db/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const slugify_1 = __importDefault(require("slugify"));
+const auth_1 = require("../middleware/auth");
 const restaurant = new hono_1.Hono();
 restaurant.get("/:slug", async (c) => {
     const slug = c.req.param("slug");
@@ -43,7 +44,7 @@ restaurant.post("/register", async (c) => {
         // cria restaurante
         const restaurantResult = await client.query(`INSERT INTO restaurants (name, slug, plan, google_review_url)
        VALUES ($1,$2,$3,$4)
-       RETURNING id, name, slug`, [name, slug, "basic", google_review_url || null]);
+       RETURNING id, name, slug`, [name, slug, null, google_review_url || null]);
         const restaurant = restaurantResult.rows[0];
         // cria usuário dono
         await client.query(`INSERT INTO users (restaurant_id, email, password_hash)
@@ -62,5 +63,21 @@ restaurant.post("/register", async (c) => {
     finally {
         client.release();
     }
+});
+restaurant.post("/update-plan", auth_1.authMiddleware, async (c) => {
+    const user = c.get("user");
+    const { plan } = await c.req.json();
+    if (!plan) {
+        return c.json({ error: "Dados inválidos" }, 400);
+    }
+    if (!["basic", "pro", "premium"].includes(plan)) {
+        return c.json({ error: "Plano inválido" }, 400);
+    }
+    await client_1.pool.query(`
+    UPDATE restaurants
+    SET plan = $1
+    WHERE id = $2
+    `, [plan, user.restaurant_id]);
+    return c.json({ message: "Plano atualizado com sucesso" });
 });
 exports.default = restaurant;

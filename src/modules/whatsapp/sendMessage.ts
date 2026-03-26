@@ -8,8 +8,6 @@ export async function sendWhatsAppMessage(
   delayMessage: number
 ) {
   try {
-    console.log("Enviando mensagem para WhatsApp:", { phone, message });
-
     const response = await axios.post(
       `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`,
       {
@@ -23,8 +21,6 @@ export async function sendWhatsAppMessage(
         }
       }
     );
-
-    console.log("Resposta da API do WhatsApp:", response.data);
 
     return { success: true, data: response.data };
 

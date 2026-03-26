@@ -4,8 +4,8 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-     "build": "tsc",
-     "start": "node dist/index.js"
+    "build": "node ./node_modules/typescript/bin/tsc",
+    "start": "node dist/index.js"
   },
   "repository": {
     "type": "git",
@@ -31,9 +31,8 @@
     "pg": "^8.20.0",
     "slugify": "^1.6.8",
     "stripe": "^20.4.1",
-    "uuid": "^13.0.0", 
-    "typescript": "^5.9.3"
-
+    "typescript": "^5.9.3",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
