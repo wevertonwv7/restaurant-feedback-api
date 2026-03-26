@@ -1,8 +1,29 @@
 import { Hono } from "hono";
 import { stripe } from "../lib/stripe";
 import { pool } from "../db/client";
+import Stripe from "stripe";
 
 const app = new Hono();
+
+async function syncSubscriptionStatus(subscription: Stripe.Subscription) {
+  const subscriptionStatus = subscription.cancel_at_period_end
+    ? "cancel_at_period_end"
+    : subscription.status;
+
+  await pool.query(
+    `
+    UPDATE restaurants
+    SET stripe_subscription_id = $1,
+        subscription_status = $2,
+        plan = CASE
+          WHEN $2 = 'canceled' THEN 'basic'
+          ELSE plan
+        END
+    WHERE stripe_customer_id = $3
+    `,
+    [subscription.id, subscriptionStatus, String(subscription.customer)]
+  );
+}
 
 app.post("/", async (c) => {
   const sig = c.req.header("stripe-signature");
@@ -45,6 +66,14 @@ app.post("/", async (c) => {
       `,
         [String(failed.customer)]
       );
+      break;
+
+    case "customer.subscription.updated":
+      await syncSubscriptionStatus(event.data.object);
+      break;
+
+    case "customer.subscription.deleted":
+      await syncSubscriptionStatus(event.data.object);
       break;
   }
 

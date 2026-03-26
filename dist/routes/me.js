@@ -8,9 +8,11 @@ me.get("/", auth_1.authMiddleware, async (c) => {
     const user = c.get("user"); // vem do JWT
     // query para pegar o plano do restaurante
     const result = await client_1.pool.query(`SELECT r.plan, 
-  r.slug AS restaurant_slug,
-  u.email,
-  r.name AS restaurant_name
+    r.slug AS restaurant_slug,
+    r.subscription_status,
+    r.stripe_subscription_id,
+    u.email,
+    r.name AS restaurant_name
   FROM restaurants r 
   JOIN users u
   on r.ID = u.restaurant_id
@@ -23,7 +25,9 @@ me.get("/", auth_1.authMiddleware, async (c) => {
             restaurant_slug: restaurant?.restaurant_slug,
             restaurant_id: user.restaurant_id,
             restaurant_name: restaurant.restaurant_name,
-            email: restaurant.email
+            email: restaurant.email,
+            subscription_status: restaurant?.subscription_status || null,
+            stripe_subscription_id: restaurant?.stripe_subscription_id || null,
         }
     });
 });
