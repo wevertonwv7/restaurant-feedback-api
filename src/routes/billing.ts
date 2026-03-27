@@ -151,6 +151,7 @@ app.post("/create-checkout-session", async (c) => {
     success_url: "https://feedbacks-flow-dev.netlify.app/checkout/success",
     cancel_url: "https://feedbacks-flow-dev.netlify.app/checkout/cancel",
     metadata: {
+      userId: user.id,
       restaurant_id: user.restaurant_id,
       requested_plan: plan,
     },

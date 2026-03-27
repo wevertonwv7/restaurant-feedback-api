@@ -102,6 +102,7 @@ app.post("/create-checkout-session", async (c) => {
       `, [customerId, user.restaurant_id]);
     }
     const priceId = STRIPE_PRICE_IDS[plan];
+    console.log("Criando sessão de checkout para cliente:", customerId, "Plano:", plan, "Price ID:", priceId);
     if (!priceId) {
         return c.json({ error: "Price do plano não configurado" }, 500);
     }
@@ -115,9 +116,10 @@ app.post("/create-checkout-session", async (c) => {
                 quantity: 1,
             },
         ],
-        success_url: "https://savor-spot-score.lovable.app/checkout/success",
-        cancel_url: "https://savor-spot-score.lovable.app/checkout/cancel",
+        success_url: "https://feedbacks-flow-dev.netlify.app/checkout/success",
+        cancel_url: "https://feedbacks-flow-dev.netlify.app/checkout/cancel",
         metadata: {
+            userId: user.id,
             restaurant_id: user.restaurant_id,
             requested_plan: plan,
         },
