@@ -23,7 +23,12 @@ async function syncSubscriptionStatus(subscription) {
         });
         return;
     }
-    await client_1.pool.query(`
+    console.log("[stripe:webhook] syncSubscriptionStatus", {
+        subscriptionId: subscription.id,
+        customerId,
+        subscriptionStatus,
+    });
+    const result = await client_1.pool.query(`
     UPDATE restaurants
     SET stripe_subscription_id = $1,
         stripe_customer_id = $2,
@@ -34,6 +39,11 @@ async function syncSubscriptionStatus(subscription) {
         END
     WHERE stripe_customer_id = $2
     `, [subscription.id, customerId, subscriptionStatus]);
+    console.log("[stripe:webhook] syncSubscriptionStatus resultado", {
+        subscriptionId: subscription.id,
+        customerId,
+        updatedRows: result.rowCount,
+    });
 }
 async function saveCheckoutCompletion(session) {
     console.log("[stripe:webhook] checkout.session.completed payload:", JSON.stringify(session));
@@ -42,6 +52,14 @@ async function saveCheckoutCompletion(session) {
     const userId = session.metadata?.userId;
     const requestedPlan = session.metadata?.requested_plan;
     const normalizedPlan = requestedPlan && VALID_PLANS.has(requestedPlan) ? requestedPlan : null;
+    console.log("[stripe:webhook] checkout.session.completed campos extraídos", {
+        sessionId: session.id,
+        subscriptionId,
+        customerId,
+        userId,
+        requestedPlan,
+        normalizedPlan,
+    });
     if (!userId || !subscriptionId || !customerId) {
         console.error("[stripe:webhook] checkout.session.completed com campos ausentes", {
             sessionId: session.id,
@@ -90,6 +108,14 @@ async function saveCheckoutCompletion(session) {
         return;
     }
     const restaurant = restaurantResult.rows[0];
+    console.log("[stripe:webhook] restaurante localizado para checkout", {
+        restaurantId: restaurant.id,
+        currentPlan: restaurant.plan,
+        currentSubscriptionId: restaurant.stripe_subscription_id,
+        currentCustomerId: restaurant.stripe_customer_id,
+        currentSubscriptionStatus: restaurant.subscription_status,
+        userId,
+    });
     const alreadySaved = restaurant.stripe_subscription_id === subscriptionId &&
         restaurant.stripe_customer_id === customerId &&
         restaurant.subscription_status === "active" &&
@@ -111,6 +137,11 @@ async function saveCheckoutCompletion(session) {
         plan = COALESCE($3, plan)
     WHERE id = $4
     `, [subscriptionId, customerId, normalizedPlan, restaurant.id]);
+    const updatedRestaurantResult = await client_1.pool.query(`
+    SELECT id, plan, stripe_subscription_id, stripe_customer_id, subscription_status
+    FROM restaurants
+    WHERE id = $1
+    `, [restaurant.id]);
     console.log("[stripe:webhook] checkout.session.completed salvo no banco", {
         restaurantId: restaurant.id,
         userId,
@@ -118,6 +149,7 @@ async function saveCheckoutCompletion(session) {
         customerId,
         plan: normalizedPlan,
         updatedRows: updateResult.rowCount,
+        restaurantAfterUpdate: updatedRestaurantResult.rows[0] ?? null,
     });
 }
 app.post("/", async (c) => {
@@ -148,17 +180,29 @@ app.post("/", async (c) => {
             case "invoice.paid": {
                 const invoice = event.data.object;
                 const customerId = getStripeId(invoice.customer);
+                const invoiceSubscription = invoice.subscription;
+                console.log("[stripe:webhook] invoice.paid payload", {
+                    invoiceId: invoice.id,
+                    customerId,
+                    subscriptionId: getStripeId(invoiceSubscription),
+                    billingReason: invoice.billing_reason,
+                });
                 if (!customerId) {
                     console.error("[stripe:webhook] invoice.paid sem customerId", {
                         invoiceId: invoice.id,
                     });
                     break;
                 }
-                await client_1.pool.query(`
+                const result = await client_1.pool.query(`
           UPDATE restaurants
           SET subscription_status = 'active'
           WHERE stripe_customer_id = $1
           `, [customerId]);
+                console.log("[stripe:webhook] invoice.paid update resultado", {
+                    invoiceId: invoice.id,
+                    customerId,
+                    updatedRows: result.rowCount,
+                });
                 break;
             }
             case "invoice.payment_failed": {

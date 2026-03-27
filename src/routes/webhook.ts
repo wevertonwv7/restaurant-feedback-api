@@ -39,7 +39,13 @@ async function syncSubscriptionStatus(subscription: Stripe.Subscription) {
     return;
   }
 
-  await pool.query(
+  console.log("[stripe:webhook] syncSubscriptionStatus", {
+    subscriptionId: subscription.id,
+    customerId,
+    subscriptionStatus,
+  });
+
+  const result = await pool.query(
     `
     UPDATE restaurants
     SET stripe_subscription_id = $1,
@@ -53,6 +59,12 @@ async function syncSubscriptionStatus(subscription: Stripe.Subscription) {
     `,
     [subscription.id, customerId, subscriptionStatus]
   );
+
+  console.log("[stripe:webhook] syncSubscriptionStatus resultado", {
+    subscriptionId: subscription.id,
+    customerId,
+    updatedRows: result.rowCount,
+  });
 }
 
 async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
@@ -64,6 +76,15 @@ async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
   const requestedPlan = session.metadata?.requested_plan;
   const normalizedPlan =
     requestedPlan && VALID_PLANS.has(requestedPlan) ? requestedPlan : null;
+
+  console.log("[stripe:webhook] checkout.session.completed campos extraídos", {
+    sessionId: session.id,
+    subscriptionId,
+    customerId,
+    userId,
+    requestedPlan,
+    normalizedPlan,
+  });
 
   if (!userId || !subscriptionId || !customerId) {
     console.error("[stripe:webhook] checkout.session.completed com campos ausentes", {
@@ -132,6 +153,15 @@ async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
     subscription_status: string | null;
   };
 
+  console.log("[stripe:webhook] restaurante localizado para checkout", {
+    restaurantId: restaurant.id,
+    currentPlan: restaurant.plan,
+    currentSubscriptionId: restaurant.stripe_subscription_id,
+    currentCustomerId: restaurant.stripe_customer_id,
+    currentSubscriptionStatus: restaurant.subscription_status,
+    userId,
+  });
+
   const alreadySaved =
     restaurant.stripe_subscription_id === subscriptionId &&
     restaurant.stripe_customer_id === customerId &&
@@ -160,6 +190,15 @@ async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
     [subscriptionId, customerId, normalizedPlan, restaurant.id]
   );
 
+  const updatedRestaurantResult = await pool.query(
+    `
+    SELECT id, plan, stripe_subscription_id, stripe_customer_id, subscription_status
+    FROM restaurants
+    WHERE id = $1
+    `,
+    [restaurant.id]
+  );
+
   console.log("[stripe:webhook] checkout.session.completed salvo no banco", {
     restaurantId: restaurant.id,
     userId,
@@ -167,6 +206,7 @@ async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
     customerId,
     plan: normalizedPlan,
     updatedRows: updateResult.rowCount,
+    restaurantAfterUpdate: updatedRestaurantResult.rows[0] ?? null,
   });
 }
 
@@ -203,6 +243,16 @@ app.post("/", async (c) => {
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = getStripeId(invoice.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined);
+        const invoiceSubscription = (invoice as Stripe.Invoice & {
+          subscription?: string | Stripe.Subscription | null;
+        }).subscription;
+
+        console.log("[stripe:webhook] invoice.paid payload", {
+          invoiceId: invoice.id,
+          customerId,
+          subscriptionId: getStripeId(invoiceSubscription),
+          billingReason: invoice.billing_reason,
+        });
 
         if (!customerId) {
           console.error("[stripe:webhook] invoice.paid sem customerId", {
@@ -211,7 +261,7 @@ app.post("/", async (c) => {
           break;
         }
 
-        await pool.query(
+        const result = await pool.query(
           `
           UPDATE restaurants
           SET subscription_status = 'active'
@@ -219,6 +269,12 @@ app.post("/", async (c) => {
           `,
           [customerId]
         );
+
+        console.log("[stripe:webhook] invoice.paid update resultado", {
+          invoiceId: invoice.id,
+          customerId,
+          updatedRows: result.rowCount,
+        });
         break;
       }
 

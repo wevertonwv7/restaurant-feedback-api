@@ -15,7 +15,7 @@ app.post("/create-customer", async (c) => {
     const user = c.get("user");
     const { email } = await c.req.json();
     if (!email) {
-        return c.json({ error: "Email é obrigatório" }, 400);
+        return c.json({ error: "Email Ã© obrigatÃ³rio" }, 400);
     }
     const customer = await stripe_1.stripe.customers.create({
         email,
@@ -27,57 +27,16 @@ app.post("/create-customer", async (c) => {
     `, [customer.id, user.restaurant_id]);
     return c.json(customer);
 });
-/* app.post("/create-subscription", authMiddleware, async (c) => {
-  const { restaurantId } = await c.req.json();
-
-  const result = await pool.query(
-    `SELECT stripe_customer_id FROM restaurants WHERE id = $1`,
-    [restaurantId]
-  );
-
-  const customerId = result.rows[0].stripe_customer_id;
-
-  const subscription = await stripe.subscriptions.create({
-    customer: customerId,
-    items: [
-      {
-        price: "price_1TD87gCtpNRgw1mVQGwDcKxK",
-      },
-    ],
-    payment_behavior: "default_incomplete",
-    expand: ["latest_invoice.payment_intent"],
-  });
-
-  await pool.query(
-    `
-    UPDATE restaurants
-    SET stripe_subscription_id = $1,
-        subscription_status = $2
-    WHERE id = $3
-    `,
-    [subscription.id, subscription.status, restaurantId]
-  );
-const invoice = subscription.latest_invoice as Stripe.Invoice & {
-  payment_intent?: Stripe.PaymentIntent;
-};
-
-if (!invoice.payment_intent) {
-  return c.json({
-    error: "PaymentIntent não foi criado",
-    subscriptionId: subscription.id,
-  }, 400);
-}
-
-return c.json({
-  subscriptionId: subscription.id,
-  clientSecret: invoice.payment_intent.client_secret,
-});
-});*/
 app.post("/create-checkout-session", async (c) => {
     const user = c.get("user");
     const { plan } = await c.req.json();
+    console.log("[stripe:checkout] iniciando create-checkout-session", {
+        userId: user?.id,
+        restaurantId: user?.restaurant_id,
+        requestedPlan: plan,
+    });
     if (!plan) {
-        return c.json({ error: "Plano é obrigatório" }, 400);
+        return c.json({ error: "Plano Ã© obrigatÃ³rio" }, 400);
     }
     const result = await client_1.pool.query(`SELECT r.stripe_customer_id, u.email
     FROM restaurants r
@@ -85,12 +44,19 @@ app.post("/create-checkout-session", async (c) => {
     WHERE r.id = $1
     LIMIT 1`, [user.restaurant_id]);
     if (result.rows.length === 0) {
-        return c.json({ error: "Restaurante não encontrado" }, 404);
+        console.error("[stripe:checkout] restaurante não encontrado para checkout", {
+            userId: user?.id,
+            restaurantId: user?.restaurant_id,
+        });
+        return c.json({ error: "Restaurante nÃ£o encontrado" }, 404);
     }
     let customerId = result.rows[0].stripe_customer_id;
     const email = result.rows[0].email;
-    // Se não tiver customer, cria um
     if (!customerId) {
+        console.log("[stripe:checkout] criando customer Stripe", {
+            restaurantId: user.restaurant_id,
+            email,
+        });
         const customer = await stripe_1.stripe.customers.create({
             email,
         });
@@ -102,10 +68,24 @@ app.post("/create-checkout-session", async (c) => {
       `, [customerId, user.restaurant_id]);
     }
     const priceId = STRIPE_PRICE_IDS[plan];
-    console.log("Criando sessão de checkout para cliente:", customerId, "Plano:", plan, "Price ID:", priceId);
+    console.log("[stripe:checkout] preparando sessão Stripe", {
+        customerId,
+        requestedPlan: plan,
+        priceId,
+    });
     if (!priceId) {
-        return c.json({ error: "Price do plano não configurado" }, 500);
+        console.error("[stripe:checkout] priceId não configurado", {
+            requestedPlan: plan,
+            priceId,
+        });
+        return c.json({ error: "Price do plano nÃ£o configurado" }, 500);
     }
+    const metadata = {
+        userId: user.id,
+        restaurant_id: user.restaurant_id,
+        requested_plan: plan,
+    };
+    console.log("[stripe:checkout] metadata enviada para Stripe", metadata);
     const session = await stripe_1.stripe.checkout.sessions.create({
         customer: customerId,
         payment_method_types: ["card"],
@@ -118,11 +98,14 @@ app.post("/create-checkout-session", async (c) => {
         ],
         success_url: "https://feedbacks-flow-dev.netlify.app/checkout/success",
         cancel_url: "https://feedbacks-flow-dev.netlify.app/checkout/cancel",
-        metadata: {
-            userId: user.id,
-            restaurant_id: user.restaurant_id,
-            requested_plan: plan,
-        },
+        metadata,
+    });
+    console.log("[stripe:checkout] sessão criada", {
+        sessionId: session.id,
+        customerId,
+        subscription: session.subscription ?? null,
+        metadata: session.metadata ?? null,
+        url: session.url,
     });
     return c.json({ url: session.url });
 });
@@ -134,7 +117,7 @@ app.post("/cancel-subscription", async (c) => {
      FROM restaurants
      WHERE id = $1`, [user.restaurant_id]);
     if (result.rows.length === 0) {
-        return c.json({ error: "Restaurante não encontrado" }, 404);
+        return c.json({ error: "Restaurante nÃ£o encontrado" }, 404);
     }
     const subscriptionId = result.rows[0].stripe_subscription_id;
     if (!subscriptionId) {
@@ -149,7 +132,7 @@ app.post("/cancel-subscription", async (c) => {
       WHERE id = $1
       `, [user.restaurant_id]);
         return c.json({
-            message: "A assinatura já estava cancelada",
+            message: "A assinatura jÃ¡ estava cancelada",
             subscriptionId,
             status: "canceled",
         });
@@ -164,7 +147,7 @@ app.post("/cancel-subscription", async (c) => {
       WHERE id = $2
       `, [updatedSubscription.cancel_at_period_end ? "cancel_at_period_end" : updatedSubscription.status, user.restaurant_id]);
         return c.json({
-            message: "Cancelamento agendado para o fim do período",
+            message: "Cancelamento agendado para o fim do perÃ­odo",
             subscriptionId: updatedSubscription.id,
             status: updatedSubscription.status,
             cancelAtPeriodEnd: updatedSubscription.cancel_at_period_end,
