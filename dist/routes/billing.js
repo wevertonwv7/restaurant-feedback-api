@@ -128,7 +128,7 @@ app.post("/cancel-subscription", async (c) => {
         await client_1.pool.query(`
       UPDATE restaurants
       SET subscription_status = 'canceled',
-          plan = 'basic'
+          plan = null
       WHERE id = $1
       `, [user.restaurant_id]);
         return c.json({
@@ -158,7 +158,7 @@ app.post("/cancel-subscription", async (c) => {
     await client_1.pool.query(`
     UPDATE restaurants
     SET subscription_status = 'canceled',
-        plan = 'basic'
+        plan = null
     WHERE id = $1
     `, [user.restaurant_id]);
     return c.json({

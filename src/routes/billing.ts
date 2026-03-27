@@ -175,7 +175,7 @@ app.post("/cancel-subscription", async (c) => {
       `
       UPDATE restaurants
       SET subscription_status = 'canceled',
-          plan = 'basic'
+          plan = null
       WHERE id = $1
       `,
       [user.restaurant_id]
@@ -217,7 +217,7 @@ app.post("/cancel-subscription", async (c) => {
     `
     UPDATE restaurants
     SET subscription_status = 'canceled',
-        plan = 'basic'
+        plan = null
     WHERE id = $1
     `,
     [user.restaurant_id]

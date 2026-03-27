@@ -52,7 +52,7 @@ async function syncSubscriptionStatus(subscription: Stripe.Subscription) {
         stripe_customer_id = $2,
         subscription_status = $3,
         plan = CASE
-          WHEN $3 = 'canceled' THEN 'basic'
+          WHEN $3 = 'canceled' THEN null
           ELSE plan
         END
     WHERE stripe_customer_id = $2
