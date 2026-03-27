@@ -146,8 +146,8 @@ app.post("/create-checkout-session", async (c) => {
         quantity: 1,
       },
     ],
-    success_url: "https://savor-spot-score.lovable.app/checkout/success",
-    cancel_url: "https://savor-spot-score.lovable.app/checkout/cancel",
+    success_url: "https://feedbacks-flow-dev.netlify.app/checkout/success",
+    cancel_url: "https://feedbacks-flow-dev.netlify.app/checkout/cancel",
     metadata: {
       restaurant_id: user.restaurant_id,
       requested_plan: plan,
