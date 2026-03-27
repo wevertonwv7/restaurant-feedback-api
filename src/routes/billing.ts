@@ -132,6 +132,8 @@ app.post("/create-checkout-session", async (c) => {
 
   const priceId = STRIPE_PRICE_IDS[plan];
 
+  console.log("Criando sessão de checkout para cliente:", customerId, "Plano:", plan, "Price ID:", priceId);
+
   if (!priceId) {
     return c.json({ error: "Price do plano não configurado" }, 500);
   }
