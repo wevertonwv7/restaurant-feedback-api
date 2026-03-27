@@ -30,6 +30,7 @@ app.use((0, cors_1.cors)({
         "https://savor-spot-score.lovable.app",
         "http://opiniofeedbacks.com",
         "https://opiniofeedbacks.com",
+        "https://feedbacks-flow-dev.netlify.app",
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:8080"
