@@ -30,6 +30,9 @@ app.use((0, cors_1.cors)({
         "https://savor-spot-score.lovable.app",
         "http://opiniofeedbacks.com",
         "https://opiniofeedbacks.com",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8080"
     ],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
