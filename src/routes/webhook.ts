@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import Stripe from "stripe";
 
-import { stripe } from "../lib/stripe";
+import { stripe, stripeWebhookSecret } from "../lib/stripe";
 import { pool } from "../db/client";
 
 const app = new Hono();
@@ -212,13 +212,12 @@ async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
 
 app.post("/", async (c) => {
   const signature = c.req.header("stripe-signature");
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   const rawBody = await c.req.text();
 
-  if (!signature || !webhookSecret) {
+  if (!signature || !stripeWebhookSecret) {
     console.error("[stripe:webhook] assinatura ou secret ausente", {
       hasSignature: Boolean(signature),
-      hasWebhookSecret: Boolean(webhookSecret),
+      hasWebhookSecret: Boolean(stripeWebhookSecret),
     });
     return c.text("Webhook signature validation failed", 400);
   }
@@ -226,7 +225,7 @@ app.post("/", async (c) => {
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    event = stripe.webhooks.constructEvent(rawBody, signature, stripeWebhookSecret);
   } catch (error) {
     console.error("[stripe:webhook] falha ao validar assinatura", error);
     return c.text("Webhook signature validation failed", 400);

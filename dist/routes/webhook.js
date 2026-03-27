@@ -154,18 +154,17 @@ async function saveCheckoutCompletion(session) {
 }
 app.post("/", async (c) => {
     const signature = c.req.header("stripe-signature");
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     const rawBody = await c.req.text();
-    if (!signature || !webhookSecret) {
+    if (!signature || !stripe_1.stripeWebhookSecret) {
         console.error("[stripe:webhook] assinatura ou secret ausente", {
             hasSignature: Boolean(signature),
-            hasWebhookSecret: Boolean(webhookSecret),
+            hasWebhookSecret: Boolean(stripe_1.stripeWebhookSecret),
         });
         return c.text("Webhook signature validation failed", 400);
     }
     let event;
     try {
-        event = stripe_1.stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+        event = stripe_1.stripe.webhooks.constructEvent(rawBody, signature, stripe_1.stripeWebhookSecret);
     }
     catch (error) {
         console.error("[stripe:webhook] falha ao validar assinatura", error);
