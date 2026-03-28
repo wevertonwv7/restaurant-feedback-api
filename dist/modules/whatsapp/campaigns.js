@@ -31,12 +31,14 @@ function shouldProcessScheduledCampaign(sendTime) {
     const [hour, minute] = sendTime.split(":").map(Number);
     return now.getHours() === hour && now.getMinutes() === minute;
 }
-async function alreadyQueuedForCampaign(campaignId, customerId) {
+async function alreadyQueuedForCampaignToday(campaignId, customerId) {
     const result = await client_1.pool.query(`
     SELECT id, status, scheduled_at, sent_at, created_at
     FROM whatsapp_messages
     WHERE campaign_id = $1
       AND customer_id = $2
+      AND DATE(COALESCE(scheduled_at, sent_at, created_at) AT TIME ZONE '${SAO_PAULO_TIMEZONE}') =
+          DATE(NOW() AT TIME ZONE '${SAO_PAULO_TIMEZONE}')
     LIMIT 1
     `, [campaignId, customerId]);
     return result.rows[0] ?? null;
@@ -130,9 +132,9 @@ async function processCampaigns() {
             count: customers.length,
         });
         for (const customer of customers) {
-            const existingMessage = await alreadyQueuedForCampaign(campaign.id, customer.id);
+            const existingMessage = await alreadyQueuedForCampaignToday(campaign.id, customer.id);
             if (existingMessage) {
-                console.log("[campaigns] cliente já possui mensagem para esta campanha, ignorando", {
+                console.log("[campaigns] cliente já possui mensagem para esta campanha hoje, ignorando", {
                     campaignId: campaign.id,
                     customerId: customer.id,
                     messageId: existingMessage.id,
