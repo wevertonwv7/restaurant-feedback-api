@@ -142,7 +142,7 @@ async function processCampaigns() {
             }
             let scheduledAt;
             if (campaign.target === "detractors") {
-                scheduledAt = new Date(Date.now() + 5 * 60 * 1000);
+                scheduledAt = new Date(Date.now() + 2 * 60 * 1000);
             }
             else {
                 scheduledAt = getScheduledTime(campaign.send_time);
