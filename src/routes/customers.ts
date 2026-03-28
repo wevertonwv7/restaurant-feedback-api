@@ -74,18 +74,33 @@ customers.post("/", async (c) => {
     );
 
     let customer_id;
+    const birthdate = buildBirthdate(birth_day, birth_month);
 
     if (customerResult.rows.length > 0) {
       customer_id = customerResult.rows[0].id;
 
-      console.log("[customers] cliente já existente", {
+      const updatedCustomer = await pool.query(
+        `
+        UPDATE customers
+        SET name = $1,
+            birthdate = $2,
+            consent_lgpd = $3
+        WHERE id = $4
+        RETURNING id, birthdate
+        `,
+        [name, birthdate, consent_lgpd, customer_id]
+      );
+
+      console.log("[customers] cliente existente atualizado", {
         customerId: customer_id,
         restaurantSlug: restaurant_slug,
         phone: phoneAtualizado,
+        birth_day,
+        birth_month,
+        birthdate,
+        savedBirthdate: updatedCustomer.rows[0]?.birthdate ?? null,
       });
     } else {
-      const birthdate = buildBirthdate(birth_day, birth_month);
-
       console.log("[customers] preparando novo cliente", {
         restaurantSlug: restaurant_slug,
         restaurantId: restaurant_id,
