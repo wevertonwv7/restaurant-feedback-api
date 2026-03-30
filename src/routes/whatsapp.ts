@@ -1,14 +1,14 @@
 import { Hono } from "hono";
+
 import { authMiddleware } from "../middleware/auth";
 import { pool } from "../db/client";
 import type { Variables } from "../types/hono";
+import { getQRCode } from "../modules/whatsapp/connect";
 
 const whatsapp = new Hono<{ Variables: Variables }>();
 
 whatsapp.post("/connect", authMiddleware, async (c) => {
-
   const user = c.get("user");
-
   const { instanceId, token } = await c.req.json();
 
   const result = await pool.query(
@@ -22,11 +22,9 @@ whatsapp.post("/connect", authMiddleware, async (c) => {
   );
 
   return c.json(result.rows[0]);
-
 });
 
 whatsapp.get("/status", authMiddleware, async (c) => {
-
   const user = c.get("user");
 
   const result = await pool.query(
@@ -40,13 +38,9 @@ whatsapp.get("/status", authMiddleware, async (c) => {
   );
 
   return c.json(result.rows[0] || null);
-
 });
 
-import { getQRCode } from "../modules/whatsapp/connect";
-
 whatsapp.get("/qr", authMiddleware, async (c) => {
-
   const user = c.get("user");
 
   const instance = await pool.query(
@@ -60,7 +54,7 @@ whatsapp.get("/qr", authMiddleware, async (c) => {
   );
 
   if (!instance.rows.length) {
-    return c.json({ error: "WhatsApp não configurado" }, 404);
+    return c.json({ error: "WhatsApp nÃ£o configurado" }, 404);
   }
 
   const data = await getQRCode(
@@ -69,11 +63,9 @@ whatsapp.get("/qr", authMiddleware, async (c) => {
   );
 
   return c.json(data);
-
 });
 
 whatsapp.post("/send", authMiddleware, async (c) => {
-
   const user = c.get("user");
   const { phone, message } = await c.req.json();
 
@@ -87,26 +79,34 @@ whatsapp.post("/send", authMiddleware, async (c) => {
     [user.restaurant_id, phone, message]
   );
 
-  return c.json(result.rows[0]);
+  console.log("[whatsapp.route] mensagem avulsa criada na fila", {
+    messageId: result.rows[0]?.id ?? null,
+    restaurantId: user.restaurant_id,
+    phone,
+  });
 
+  return c.json(result.rows[0]);
 });
 
 whatsapp.post("/campaign", authMiddleware, async (c) => {
   const user = c.get("user");
 
   if (!user) {
-    return c.json({ error: "Usuário não autenticado" }, 401);
+    return c.json({ error: "UsuÃ¡rio nÃ£o autenticado" }, 401);
   }
 
   const { message, filter } = await c.req.json();
 
   if (!message) {
-    return c.json({ error: "Mensagem é obrigatória" }, 400);
+    return c.json({ error: "Mensagem Ã© obrigatÃ³ria" }, 400);
   }
 
   try {
+    console.log("[whatsapp.route] criando campanha manual de mensagens", {
+      restaurantId: user.restaurant_id,
+      filter: filter ?? null,
+    });
 
-    // 1️⃣ buscar clientes com filtro
     let customersQuery = `
       SELECT DISTINCT c.id, c.name, c.phone
       FROM customers c
@@ -133,44 +133,51 @@ whatsapp.post("/campaign", authMiddleware, async (c) => {
     }
 
     if (filter === "birthdate") {
-  customersQuery += `
-    AND EXTRACT(DAY FROM c.birth_date) = EXTRACT(DAY FROM NOW())
-    AND EXTRACT(MONTH FROM c.birth_date) = EXTRACT(MONTH FROM NOW())
-  `;
+      customersQuery += `
+        AND EXTRACT(DAY FROM c.birth_date) = EXTRACT(DAY FROM NOW())
+        AND EXTRACT(MONTH FROM c.birth_date) = EXTRACT(MONTH FROM NOW())
+      `;
     }
 
-    const customers = await pool.query(customersQuery, [
-      user.restaurant_id
-    ]);
+    const customers = await pool.query(customersQuery, [user.restaurant_id]);
 
-    // 2️⃣ inserir mensagens na fila
+    console.log("[whatsapp.route] clientes encontrados para campanha manual", {
+      restaurantId: user.restaurant_id,
+      filter: filter ?? null,
+      count: customers.rows.length,
+    });
+
     for (const customer of customers.rows) {
+      const personalizedMessage = message.replace("{{name}}", customer.name || "");
 
-      const personalizedMessage = message.replace(
-        "{{name}}",
-        customer.name || ""
-      );
-
-      await pool.query(
+      const insertResult = await pool.query(
         `
         INSERT INTO whatsapp_messages
         (restaurant_id, customer_id, phone, message)
         VALUES ($1, $2, $3, $4)
+        RETURNING id, status
         `,
         [
           user.restaurant_id,
           customer.id,
           customer.phone,
-          personalizedMessage
+          personalizedMessage,
         ]
       );
+
+      console.log("[whatsapp.route] mensagem de campanha manual criada", {
+        messageId: insertResult.rows[0]?.id ?? null,
+        restaurantId: user.restaurant_id,
+        customerId: customer.id,
+        customerName: customer.name,
+        phone: customer.phone,
+      });
     }
 
     return c.json({
       success: true,
-      total: customers.rows.length
+      total: customers.rows.length,
     });
-
   } catch (err: any) {
     console.error("Erro ao criar campanha:", err);
 
@@ -182,13 +189,13 @@ whatsapp.post("/automation/birthday", authMiddleware, async (c) => {
   const user = c.get("user");
 
   if (!user) {
-    return c.json({ error: "Usuário não autenticado" }, 401);
+    return c.json({ error: "UsuÃ¡rio nÃ£o autenticado" }, 401);
   }
 
   const { message, active, title } = await c.req.json();
 
   if (!message || !title) {
-    return c.json({ error: "Título e mensagem são obrigatórios" }, 400);
+    return c.json({ error: "TÃ­tulo e mensagem sÃ£o obrigatÃ³rios" }, 400);
   }
 
   try {
@@ -207,19 +214,17 @@ whatsapp.post("/automation/birthday", authMiddleware, async (c) => {
     );
 
     return c.json({ success: true });
-
   } catch (err) {
-    console.error("Erro ao salvar automação:", err);
-    return c.json({ error: "Erro ao salvar automação" }, 500);
+    console.error("Erro ao salvar automaÃ§Ã£o:", err);
+    return c.json({ error: "Erro ao salvar automaÃ§Ã£o" }, 500);
   }
 });
-
 
 whatsapp.get("/automation", authMiddleware, async (c) => {
   const user = c.get("user");
 
   if (!user) {
-    return c.json({ error: "Usuário não autenticado" }, 401);
+    return c.json({ error: "UsuÃ¡rio nÃ£o autenticado" }, 401);
   }
 
   try {
@@ -241,12 +246,10 @@ whatsapp.get("/automation", authMiddleware, async (c) => {
     );
 
     return c.json(result.rows);
-
   } catch (err) {
-    console.error("Erro ao buscar automações:", err);
-    return c.json({ error: "Erro ao buscar automações" }, 500);
+    console.error("Erro ao buscar automaÃ§Ãµes:", err);
+    return c.json({ error: "Erro ao buscar automaÃ§Ãµes" }, 500);
   }
 });
-
 
 export default whatsapp;

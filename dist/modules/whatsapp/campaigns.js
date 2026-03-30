@@ -31,24 +31,30 @@ function shouldProcessScheduledCampaign(sendTime) {
     const [hour, minute] = sendTime.split(":").map(Number);
     return now.getHours() === hour && now.getMinutes() === minute;
 }
+async function alreadyQueuedForCampaignToday(campaignId, customerId) {
+    const result = await client_1.pool.query(`
+    SELECT id, status, scheduled_at, sent_at, created_at
+    FROM whatsapp_messages
+    WHERE campaign_id = $1
+      AND customer_id = $2
+      AND DATE(COALESCE(scheduled_at, sent_at, created_at) AT TIME ZONE '${SAO_PAULO_TIMEZONE}') =
+          DATE(NOW() AT TIME ZONE '${SAO_PAULO_TIMEZONE}')
+    LIMIT 1
+    `, [campaignId, customerId]);
+    return result.rows[0] ?? null;
+}
 async function getCustomers(campaign) {
     const { target, restaurant_id, custom_filter } = campaign;
     if (target === "detractors") {
         const res = await client_1.pool.query(`
-      SELECT *
+      SELECT DISTINCT a.*
       FROM customers a
       JOIN feedbacks f ON f.customer_id = a.id
       WHERE a.restaurant_id = $1
-      AND a.consent_lgpd = true
-      AND f.nps <= 3
-      AND f.created_at >= NOW() - INTERVAL '15 minutes'
-      AND NOT EXISTS (
-        SELECT 1
-        FROM whatsapp_messages wm
-        WHERE wm.customer_id = a.id
-        AND wm.campaign_id IS NOT NULL
-      );
-    `, [restaurant_id]);
+        AND a.consent_lgpd = true
+        AND f.nps <= 3
+        AND f.created_at >= NOW() - INTERVAL '15 minutes'
+      `, [restaurant_id]);
         return res.rows;
     }
     if (target === "birthday") {
@@ -56,25 +62,25 @@ async function getCustomers(campaign) {
       SELECT *
       FROM customers c
       WHERE c.restaurant_id = $1
-      AND c.consent_lgpd = true
-      AND EXTRACT(DAY FROM c.birthdate) = EXTRACT(DAY FROM NOW() AT TIME ZONE '${SAO_PAULO_TIMEZONE}')
-      AND EXTRACT(MONTH FROM c.birthdate) = EXTRACT(MONTH FROM NOW() AT TIME ZONE '${SAO_PAULO_TIMEZONE}')
-      AND NOT EXISTS (
-        SELECT 1
-        FROM whatsapp_messages wm
-        WHERE wm.customer_id = c.id
-        AND wm.campaign_id = $2
-        AND DATE(COALESCE(wm.scheduled_at, wm.sent_at, wm.created_at) AT TIME ZONE '${SAO_PAULO_TIMEZONE}') =
-            DATE(NOW() AT TIME ZONE '${SAO_PAULO_TIMEZONE}')
-      );
-    `, [restaurant_id, campaign.id]);
+        AND c.consent_lgpd = true
+        AND EXTRACT(DAY FROM c.birthdate) = EXTRACT(DAY FROM NOW() AT TIME ZONE '${SAO_PAULO_TIMEZONE}')
+        AND EXTRACT(MONTH FROM c.birthdate) = EXTRACT(MONTH FROM NOW() AT TIME ZONE '${SAO_PAULO_TIMEZONE}')
+        AND NOT EXISTS (
+          SELECT 1
+          FROM whatsapp_messages wm
+          WHERE wm.customer_id = c.id
+            AND wm.campaign_id = $2
+            AND DATE(COALESCE(wm.scheduled_at, wm.sent_at, wm.created_at) AT TIME ZONE '${SAO_PAULO_TIMEZONE}') =
+                DATE(NOW() AT TIME ZONE '${SAO_PAULO_TIMEZONE}')
+        )
+      `, [restaurant_id, campaign.id]);
         return res.rows;
     }
     if (target === "custom") {
         let query = `
       SELECT * FROM customers c
       WHERE c.restaurant_id = $1
-      AND c.consent_lgpd = true
+        AND c.consent_lgpd = true
     `;
         const values = [restaurant_id];
         let index = 2;
@@ -93,9 +99,9 @@ async function getCustomers(campaign) {
         SELECT 1
         FROM whatsapp_messages wm
         WHERE wm.customer_id = c.id
-        AND wm.campaign_id = $${index}
-        AND DATE(COALESCE(wm.scheduled_at, wm.sent_at, wm.created_at) AT TIME ZONE '${SAO_PAULO_TIMEZONE}') =
-            DATE(NOW() AT TIME ZONE '${SAO_PAULO_TIMEZONE}')
+          AND wm.campaign_id = $${index}
+          AND DATE(COALESCE(wm.scheduled_at, wm.sent_at, wm.created_at) AT TIME ZONE '${SAO_PAULO_TIMEZONE}') =
+              DATE(NOW() AT TIME ZONE '${SAO_PAULO_TIMEZONE}')
       )
     `;
         values.push(campaign.id);
@@ -109,23 +115,43 @@ async function processCampaigns() {
     SELECT * FROM campaigns
     WHERE active = true
   `);
+    console.log("[campaigns] campanhas ativas carregadas", {
+        count: campaigns.rows.length,
+    });
     for (const campaign of campaigns.rows) {
-        if (!isTodayValid(campaign.days_of_week))
+        if (!isTodayValid(campaign.days_of_week)) {
             continue;
-        if (campaign.target !== "detractors" && !shouldProcessScheduledCampaign(campaign.send_time))
+        }
+        if (campaign.target !== "detractors" && !shouldProcessScheduledCampaign(campaign.send_time)) {
             continue;
+        }
         const customers = await getCustomers(campaign);
+        console.log("[campaigns] clientes elegíveis", {
+            campaignId: campaign.id,
+            target: campaign.target,
+            count: customers.length,
+        });
         for (const customer of customers) {
+            const existingMessage = await alreadyQueuedForCampaignToday(campaign.id, customer.id);
+            if (existingMessage) {
+                console.log("[campaigns] cliente já possui mensagem para esta campanha hoje, ignorando", {
+                    campaignId: campaign.id,
+                    customerId: customer.id,
+                    messageId: existingMessage.id,
+                    status: existingMessage.status,
+                });
+                continue;
+            }
             let scheduledAt;
             if (campaign.target === "detractors") {
-                // ⚡ delay de 5 minutos
-                scheduledAt = new Date(Date.now() + 5 * 60 * 1000);
+                scheduledAt = new Date(Date.now() + 2 * 60 * 1000);
             }
             else {
-                // 📢 usa horário da campanha
                 scheduledAt = getScheduledTime(campaign.send_time);
             }
-            await client_1.pool.query(`
+            const normalizedPhone = normalizePhone(customer.phone);
+            const personalizedText = personalizeMessage(campaign.message, customer);
+            const insertResult = await client_1.pool.query(`
         INSERT INTO whatsapp_messages (
           restaurant_id,
           customer_id,
@@ -136,15 +162,23 @@ async function processCampaigns() {
           scheduled_at
         )
         VALUES ($1, $2, $3, $4, 'pending', $5, $6)
-      `, [
+        RETURNING id, status, scheduled_at
+        `, [
                 campaign.restaurant_id,
                 customer.id,
-                normalizePhone(customer.phone),
-                personalizeMessage(campaign.message, customer),
+                normalizedPhone,
+                personalizedText,
                 campaign.id,
-                scheduledAt
+                scheduledAt,
             ]);
-            console.log('scheduledAt: ', scheduledAt, ' - send_time: ', campaign.send_time, ' - customer: ', customer.name); // DEBUG
+            console.log("[campaigns] mensagem criada", {
+                campaignId: campaign.id,
+                customerId: customer.id,
+                customerName: customer.name,
+                messageId: insertResult.rows[0]?.id ?? null,
+                scheduledAt,
+                sendTime: campaign.send_time,
+            });
         }
     }
 }

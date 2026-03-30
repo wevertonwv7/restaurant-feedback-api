@@ -64,11 +64,18 @@ restaurant.post("/register", async (c) => {
     const restaurantResult = await client.query(
       `INSERT INTO restaurants (name, slug, plan, google_review_url)
        VALUES ($1,$2,$3,$4)
-       RETURNING id, name, slug`,
+       RETURNING id, name, slug, plan`,
       [name, slug, null, google_review_url || null]
     );
 
     const restaurant = restaurantResult.rows[0];
+
+    console.log("[restaurants.register] restaurante criado", {
+      restaurantId: restaurant.id,
+      slug: restaurant.slug,
+      plan: restaurant.plan,
+      email,
+    });
 
     // cria usuário dono
     await client.query(
