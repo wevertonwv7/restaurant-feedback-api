@@ -31,6 +31,7 @@ app.use((0, cors_1.cors)({
         "http://opiniofeedbacks.com",
         "https://opiniofeedbacks.com",
         "https://feedbacks-flow-dev.netlify.app",
+        "https://restaurant-feedback-api-dev.up.railway.app",
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:8080"

@@ -37,6 +37,7 @@ app.use(
       "http://opiniofeedbacks.com",
       "https://opiniofeedbacks.com",
       "https://feedbacks-flow-dev.netlify.app",
+      "https://restaurant-feedback-api-dev.up.railway.app",
       "http://localhost:3000",
       "http://localhost:5173",
       "http://localhost:8080"
