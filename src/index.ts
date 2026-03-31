@@ -33,7 +33,6 @@ const app = new Hono<{ Variables: Variables }>();
 app.use(
   cors({
     origin: [
-      "https://savor-spot-score.lovable.app",
       "http://opiniofeedbacks.com",
       "https://opiniofeedbacks.com",
       "https://feedbacks-flow-dev.netlify.app",
