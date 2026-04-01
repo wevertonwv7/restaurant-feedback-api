@@ -33,8 +33,7 @@ const app = new Hono<{ Variables: Variables }>();
 app.use(
   cors({
     origin: [
-      "http://opiniofeedbacks.com",
-      "https://opiniofeedbacks.com",
+      "https://opiniofeedbacks.com"
     ],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],

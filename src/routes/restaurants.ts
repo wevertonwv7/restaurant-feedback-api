@@ -6,6 +6,28 @@ import { authMiddleware } from "../middleware/auth";
 import type { Variables } from "../types/hono";
 
 const restaurant = new Hono<{ Variables: Variables }>();
+const FEEDBACK_FORM_BASE_URL =
+  process.env.FEEDBACK_FORM_BASE_URL || "https://feedbacks-flow-dev.netlify.app/feedback";
+
+function normalizeTableNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return String(value).trim();
+}
+
+function buildFeedbackUrl(slug: string, tableNumber?: string | null) {
+  const url = new URL(FEEDBACK_FORM_BASE_URL);
+
+  url.searchParams.set("restaurant_slug", slug);
+
+  if (tableNumber) {
+    url.searchParams.set("table_number", tableNumber);
+  }
+
+  return url.toString();
+}
 
 restaurant.get("/:slug", async (c) => {
   const slug = c.req.param("slug");
@@ -128,6 +150,36 @@ restaurant.post("/update-plan", authMiddleware, async (c) => {
   );
 
   return c.json({ message: "Plano atualizado com sucesso" });
+});
+
+restaurant.post("/generate-feedback-link", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json().catch(() => ({}));
+  const tableNumber = normalizeTableNumber(body.table_number);
+
+  const result = await pool.query(
+    `
+    SELECT slug, name
+    FROM restaurants
+    WHERE id = $1
+    LIMIT 1
+    `,
+    [user.restaurant_id]
+  );
+
+  const restaurantData = result.rows[0];
+
+  if (!restaurantData) {
+    return c.json({ error: "Restaurante não encontrado" }, 404);
+  }
+
+  return c.json({
+    restaurant_slug: restaurantData.slug,
+    restaurant_name: restaurantData.name,
+    table_number: tableNumber,
+    type: tableNumber ? "table" : "general",
+    feedback_url: buildFeedbackUrl(restaurantData.slug, tableNumber),
+  });
 });
 
 export default restaurant;
