@@ -12,8 +12,9 @@ function buildDetractorAlertMessage(params) {
     const fallback = [
         `Alerta de detrator no restaurante ${params.restaurantName}.`,
         `Cliente: ${params.customerName}.`,
+        `Mesa: ${params.tableNumber || "nao informada"}.`,
         `NPS: ${params.nps}.`,
-        `Comentário: ${params.comment || "não informado"}.`,
+        `Comentario: ${params.comment || "nao informado"}.`,
     ].join(" ");
     const template = params.template?.trim() ? params.template : fallback;
     return template
@@ -21,7 +22,8 @@ function buildDetractorAlertMessage(params) {
         .replace(/\{name\}/g, params.customerName)
         .replace(/\{customer_name\}/g, params.customerName)
         .replace(/\{nps\}/g, String(params.nps))
-        .replace(/\{comment\}/g, params.comment || "não informado");
+        .replace(/\{table_number\}/g, params.tableNumber || "nao informada")
+        .replace(/\{comment\}/g, params.comment || "nao informado");
 }
 async function enqueueDetractorNotifications(params) {
     const campaignsResult = await client_1.pool.query(`
@@ -41,10 +43,6 @@ async function enqueueDetractorNotifications(params) {
             ? campaign.custom_filter?.notify_phones.filter(Boolean)
             : [];
         if (notifyPhones.length === 0) {
-            console.log("[feedback] campanha de detratores sem notify_phones, alerta não enfileirado", {
-                campaignId: campaign.id,
-                title: campaign.title,
-            });
             continue;
         }
         const message = buildDetractorAlertMessage({
@@ -52,6 +50,7 @@ async function enqueueDetractorNotifications(params) {
             restaurantName: params.restaurantName,
             customerName: params.customerName,
             nps: params.nps,
+            tableNumber: params.tableNumber,
             comment: params.comment,
         });
         for (const rawPhone of notifyPhones) {
@@ -75,6 +74,7 @@ async function enqueueDetractorNotifications(params) {
                 customerId: params.customerId,
                 notifyPhone: phone,
                 messageId: insertResult.rows[0]?.id ?? null,
+                tableNumber: params.tableNumber ?? null,
             });
         }
     }
@@ -82,9 +82,9 @@ async function enqueueDetractorNotifications(params) {
 feedback.post("/", async (c) => {
     try {
         const body = await c.req.json();
-        const { restaurant_slug, customer_id, atendimento, qualidade_comida, tempo_espera, custo_beneficio, nps, comment, attendant_id, attendant_rating, attendant_comment, } = body;
+        const { restaurant_slug, customer_id, atendimento, qualidade_comida, tempo_espera, custo_beneficio, nps, comment, attendant_id, attendant_rating, attendant_comment, table_number, } = body;
         if (!restaurant_slug || !customer_id) {
-            return c.json({ error: "restaurant_slug e customer_id sÃ£o obrigatÃ³rios" }, 400);
+            return c.json({ error: "restaurant_slug e customer_id sao obrigatorios" }, 400);
         }
         const restaurantResult = await client_1.pool.query(`
       SELECT id, name, plan, google_review_url
@@ -93,7 +93,7 @@ feedback.post("/", async (c) => {
       `, [restaurant_slug]);
         const restaurant = restaurantResult.rows[0];
         if (!restaurant) {
-            return c.json({ error: "Restaurante nÃ£o encontrado" }, 404);
+            return c.json({ error: "Restaurante nao encontrado" }, 404);
         }
         const customerResult = await client_1.pool.query(`
       SELECT id, name, phone
@@ -104,7 +104,7 @@ feedback.post("/", async (c) => {
       `, [customer_id, restaurant.id]);
         const customer = customerResult.rows[0];
         if (!customer) {
-            return c.json({ error: "Cliente nÃ£o encontrado" }, 404);
+            return c.json({ error: "Cliente nao encontrado" }, 404);
         }
         const feedbackResult = await client_1.pool.query(`
       INSERT INTO feedbacks
@@ -116,9 +116,10 @@ feedback.post("/", async (c) => {
         tempo_espera,
         custo_beneficio,
         nps,
-        comment
+        comment,
+        table_number
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING *
       `, [
             restaurant.id,
@@ -129,14 +130,9 @@ feedback.post("/", async (c) => {
             custo_beneficio,
             nps,
             comment,
+            table_number || null,
         ]);
         const feedbackSaved = feedbackResult.rows[0];
-        console.log("[feedback] feedback salvo", {
-            feedbackId: feedbackSaved.id,
-            restaurantId: restaurant.id,
-            customerId: customer_id,
-            nps,
-        });
         if (attendant_id && attendant_rating) {
             await client_1.pool.query(`
         INSERT INTO attendant_ratings
@@ -175,6 +171,7 @@ feedback.post("/", async (c) => {
                 customerId: customer.id,
                 customerName: customer.name || "Cliente",
                 nps,
+                tableNumber: table_number || null,
                 comment: comment || null,
             });
         }

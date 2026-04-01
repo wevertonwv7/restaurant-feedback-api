@@ -15,13 +15,15 @@ function buildDetractorAlertMessage(params: {
   restaurantName: string;
   customerName: string;
   nps: number;
+  tableNumber?: string | null;
   comment?: string | null;
 }) {
   const fallback = [
     `Alerta de detrator no restaurante ${params.restaurantName}.`,
     `Cliente: ${params.customerName}.`,
+    `Mesa: ${params.tableNumber || "nao informada"}.`,
     `NPS: ${params.nps}.`,
-    `Comentário: ${params.comment || "não informado"}.`,
+    `Comentario: ${params.comment || "nao informado"}.`,
   ].join(" ");
 
   const template = params.template?.trim() ? params.template : fallback;
@@ -31,7 +33,8 @@ function buildDetractorAlertMessage(params: {
     .replace(/\{name\}/g, params.customerName)
     .replace(/\{customer_name\}/g, params.customerName)
     .replace(/\{nps\}/g, String(params.nps))
-    .replace(/\{comment\}/g, params.comment || "não informado");
+    .replace(/\{table_number\}/g, params.tableNumber || "nao informada")
+    .replace(/\{comment\}/g, params.comment || "nao informado");
 }
 
 async function enqueueDetractorNotifications(params: {
@@ -40,6 +43,7 @@ async function enqueueDetractorNotifications(params: {
   customerId: string;
   customerName: string;
   nps: number;
+  tableNumber?: string | null;
   comment?: string | null;
 }) {
   const campaignsResult = await pool.query(
@@ -72,10 +76,6 @@ async function enqueueDetractorNotifications(params: {
       : [];
 
     if (notifyPhones.length === 0) {
-      console.log("[feedback] campanha de detratores sem notify_phones, alerta não enfileirado", {
-        campaignId: campaign.id,
-        title: campaign.title,
-      });
       continue;
     }
 
@@ -84,6 +84,7 @@ async function enqueueDetractorNotifications(params: {
       restaurantName: params.restaurantName,
       customerName: params.customerName,
       nps: params.nps,
+      tableNumber: params.tableNumber,
       comment: params.comment,
     });
 
@@ -113,6 +114,7 @@ async function enqueueDetractorNotifications(params: {
         customerId: params.customerId,
         notifyPhone: phone,
         messageId: insertResult.rows[0]?.id ?? null,
+        tableNumber: params.tableNumber ?? null,
       });
     }
   }
@@ -134,11 +136,12 @@ feedback.post("/", async (c) => {
       attendant_id,
       attendant_rating,
       attendant_comment,
+      table_number,
     } = body;
 
     if (!restaurant_slug || !customer_id) {
       return c.json(
-        { error: "restaurant_slug e customer_id sÃ£o obrigatÃ³rios" },
+        { error: "restaurant_slug e customer_id sao obrigatorios" },
         400
       );
     }
@@ -155,7 +158,7 @@ feedback.post("/", async (c) => {
     const restaurant = restaurantResult.rows[0];
 
     if (!restaurant) {
-      return c.json({ error: "Restaurante nÃ£o encontrado" }, 404);
+      return c.json({ error: "Restaurante nao encontrado" }, 404);
     }
 
     const customerResult = await pool.query(
@@ -172,7 +175,7 @@ feedback.post("/", async (c) => {
     const customer = customerResult.rows[0];
 
     if (!customer) {
-      return c.json({ error: "Cliente nÃ£o encontrado" }, 404);
+      return c.json({ error: "Cliente nao encontrado" }, 404);
     }
 
     const feedbackResult = await pool.query(
@@ -186,9 +189,10 @@ feedback.post("/", async (c) => {
         tempo_espera,
         custo_beneficio,
         nps,
-        comment
+        comment,
+        table_number
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING *
       `,
       [
@@ -200,17 +204,11 @@ feedback.post("/", async (c) => {
         custo_beneficio,
         nps,
         comment,
+        table_number || null,
       ]
     );
 
     const feedbackSaved = feedbackResult.rows[0];
-
-    console.log("[feedback] feedback salvo", {
-      feedbackId: feedbackSaved.id,
-      restaurantId: restaurant.id,
-      customerId: customer_id,
-      nps,
-    });
 
     if (attendant_id && attendant_rating) {
       await pool.query(
@@ -259,6 +257,7 @@ feedback.post("/", async (c) => {
         customerId: customer.id,
         customerName: customer.name || "Cliente",
         nps,
+        tableNumber: table_number || null,
         comment: comment || null,
       });
     }

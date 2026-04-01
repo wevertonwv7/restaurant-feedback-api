@@ -58,6 +58,7 @@ feedbacks.get("/", authMiddleware, async (c) => {
       f.custo_beneficio,
       f.nps,
       f.comment,
+      f.table_number,
       f.created_at,
       c.name
      FROM feedbacks f
