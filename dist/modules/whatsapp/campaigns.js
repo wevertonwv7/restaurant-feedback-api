@@ -22,6 +22,12 @@ function normalizePhone(phone) {
 function personalizeMessage(message, customer) {
     return message.replace("{name}", customer.name || "");
 }
+function shouldSendToCustomer(campaign) {
+    if (campaign.target !== "detractors") {
+        return true;
+    }
+    return campaign.custom_filter?.send_to_customer !== false;
+}
 function isTodayValid(days) {
     const today = getSaoPauloNow().getDay();
     return days.includes(today);
@@ -131,6 +137,12 @@ async function processCampaigns() {
             target: campaign.target,
             count: customers.length,
         });
+        if (!shouldSendToCustomer(campaign)) {
+            console.log("[campaigns] campanha de detratores configurada para não enviar ao cliente", {
+                campaignId: campaign.id,
+            });
+            continue;
+        }
         for (const customer of customers) {
             const existingMessage = await alreadyQueuedForCampaignToday(campaign.id, customer.id);
             if (existingMessage) {
