@@ -22,6 +22,7 @@ const whatsapp_1 = __importDefault(require("./routes/whatsapp"));
 const whatsappSender_1 = require("./workers/whatsappSender");
 const campaigns_1 = __importDefault(require("./routes/campaigns"));
 const campaignWorker_1 = require("./workers/campaignWorker");
+const alertSender_1 = require("./workers/alertSender");
 const billing_1 = __importDefault(require("./routes/billing"));
 const webhook_1 = __importDefault(require("./routes/webhook"));
 const app = new hono_1.Hono();
@@ -67,6 +68,7 @@ app.route("/api/webhook", webhook_1.default);
 //});
 // 🚀 inicia worker sem quebrar o server
 (0, campaignWorker_1.campaignWorker)().catch(console.error);
+(0, alertSender_1.alertWorker)().catch(console.error);
 const port = Number(process.env.PORT) || 3000;
 console.log(`Servidor rodando em http://localhost:${port}`);
 (0, node_server_1.serve)({

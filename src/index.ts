@@ -21,6 +21,7 @@ import { birthdayWorker } from "./workers/birthdayWorker";
 import { processCampaigns } from "./modules/whatsapp/campaigns"; 
 import campaigns from "./routes/campaigns";
 import { campaignWorker } from "./workers/campaignWorker";
+import { alertWorker } from "./workers/alertSender";
 import billing from "./routes/billing";
 import webhook from "./routes/webhook";
 
@@ -80,6 +81,7 @@ whatsappWorker().catch((err) => {
 
 // 🚀 inicia worker sem quebrar o server
 campaignWorker().catch(console.error);
+alertWorker().catch(console.error);
 
 const port = Number(process.env.PORT) || 3000;
 console.log(`Servidor rodando em http://localhost:${port}`);

@@ -93,18 +93,17 @@ async function enqueueDetractorNotifications(params: {
 
       const insertResult = await pool.query(
         `
-        INSERT INTO whatsapp_messages
+        INSERT INTO whatsapp_alert_messages
         (
           restaurant_id,
           customer_id,
           phone,
           message,
           status,
-          campaign_id,
-          scheduled_at
+          campaign_id
         )
-        VALUES ($1, $2, $3, $4, 'pending', $5, NOW())
-        RETURNING id, status, scheduled_at
+        VALUES ($1, $2, $3, $4, 'pending', $5)
+        RETURNING id, status, created_at
         `,
         [params.restaurantId, params.customerId, phone, message, campaign.id]
       );
@@ -251,15 +250,26 @@ feedback.post("/", async (c) => {
     if (nps <= 6) {
       response.action = "collect_internal_feedback";
 
-      await enqueueDetractorNotifications({
+      const canUseDetractorAlerts =
+        restaurant.plan === "pro" || restaurant.plan === "premium";
+
+      console.log("[feedback] validando alerta de detrator por plano", {
         restaurantId: restaurant.id,
-        restaurantName: restaurant.name,
-        customerId: customer.id,
-        customerName: customer.name || "Cliente",
-        nps,
-        tableNumber: table_number || null,
-        comment: comment || null,
+        plan: restaurant.plan,
+        canUseDetractorAlerts,
       });
+
+      if (canUseDetractorAlerts) {
+        await enqueueDetractorNotifications({
+          restaurantId: restaurant.id,
+          restaurantName: restaurant.name,
+          customerId: customer.id,
+          customerName: customer.name || "Cliente",
+          nps,
+          tableNumber: table_number || null,
+          comment: comment || null,
+        });
+      }
     }
 
     return c.json(response);
