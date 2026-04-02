@@ -13,6 +13,7 @@ const feedbacks_1 = __importDefault(require("./routes/feedbacks"));
 const birthdays_1 = __importDefault(require("./routes/birthdays"));
 const me_1 = __importDefault(require("./routes/me"));
 const restaurants_1 = __importDefault(require("./routes/restaurants"));
+const restaurant_alert_settings_1 = __importDefault(require("./routes/restaurant-alert-settings"));
 const customers_1 = __importDefault(require("./routes/customers"));
 const metrics_1 = __importDefault(require("./routes/metrics"));
 const attendants_1 = __importDefault(require("./routes/attendants"));
@@ -22,12 +23,19 @@ const whatsapp_1 = __importDefault(require("./routes/whatsapp"));
 const whatsappSender_1 = require("./workers/whatsappSender");
 const campaigns_1 = __importDefault(require("./routes/campaigns"));
 const campaignWorker_1 = require("./workers/campaignWorker");
+const alertSender_1 = require("./workers/alertSender");
 const billing_1 = __importDefault(require("./routes/billing"));
 const webhook_1 = __importDefault(require("./routes/webhook"));
 const app = new hono_1.Hono();
 app.use((0, cors_1.cors)({
     origin: [
-        "https://opiniofeedbacks.com"
+        "http://opiniofeedbacks.com",
+        "https://opiniofeedbacks.com",
+        "https://feedbacks-flow-dev.netlify.app",
+        "https://restaurant-feedback-api-dev.up.railway.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8080"
     ],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -42,6 +50,7 @@ app.route("/api/feedbacks", feedbacks_1.default);
 app.route("/api/birthdays", birthdays_1.default);
 app.route("/api/me", me_1.default);
 app.route("/api/restaurant", restaurants_1.default);
+app.route("/api/restaurant-alert-settings", restaurant_alert_settings_1.default);
 app.route("/api/customers", customers_1.default);
 app.route("/api/metrics", metrics_1.default);
 app.route("/api/attendants", attendants_1.default);
@@ -61,6 +70,7 @@ app.route("/api/webhook", webhook_1.default);
 //});
 // 🚀 inicia worker sem quebrar o server
 (0, campaignWorker_1.campaignWorker)().catch(console.error);
+(0, alertSender_1.alertWorker)().catch(console.error);
 const port = Number(process.env.PORT) || 3000;
 console.log(`Servidor rodando em http://localhost:${port}`);
 (0, node_server_1.serve)({

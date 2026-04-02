@@ -11,30 +11,21 @@ function normalizePhone(phone: string) {
 }
 
 function buildDetractorAlertMessage(params: {
-  template?: string | null;
   restaurantName: string;
   customerName: string;
+  customerPhone: string;
   nps: number;
   tableNumber?: string | null;
   comment?: string | null;
 }) {
-  const fallback = [
-    `Alerta de detrator no restaurante ${params.restaurantName}.`,
+  return [
+    `Alerta de feedback detrator no restaurante ${params.restaurantName}.`,
     `Cliente: ${params.customerName}.`,
-    `Mesa: ${params.tableNumber || "nao informada"}.`,
-    `NPS: ${params.nps}.`,
+    `WhatsApp: ${params.customerPhone}.`,
+    `Nota: ${params.nps}.`,
     `Comentario: ${params.comment || "nao informado"}.`,
+    `Mesa: ${params.tableNumber || "nao informada"}.`,
   ].join(" ");
-
-  const template = params.template?.trim() ? params.template : fallback;
-
-  return template
-    .replace(/\{restaurant_name\}/g, params.restaurantName)
-    .replace(/\{name\}/g, params.customerName)
-    .replace(/\{customer_name\}/g, params.customerName)
-    .replace(/\{nps\}/g, String(params.nps))
-    .replace(/\{table_number\}/g, params.tableNumber || "nao informada")
-    .replace(/\{comment\}/g, params.comment || "nao informado");
 }
 
 async function enqueueDetractorNotifications(params: {
@@ -42,81 +33,81 @@ async function enqueueDetractorNotifications(params: {
   restaurantName: string;
   customerId: string;
   customerName: string;
+  customerPhone: string;
   nps: number;
   tableNumber?: string | null;
   comment?: string | null;
 }) {
-  const campaignsResult = await pool.query(
+  const settingsResult = await pool.query(
     `
-    SELECT id, title, custom_filter
-    FROM campaigns
+    SELECT detractor_alert_enabled, detractor_alert_phones
+    FROM restaurant_alert_settings
     WHERE restaurant_id = $1
-      AND active = true
-      AND target = 'detractors'
+    LIMIT 1
     `,
     [params.restaurantId]
   );
 
-  console.log("[feedback] campanhas de detratores encontradas para alerta", {
-    restaurantId: params.restaurantId,
-    customerId: params.customerId,
-    count: campaignsResult.rows.length,
+  if (settingsResult.rows.length === 0) {
+    console.log("[feedback] restaurante sem configuração de alerta de detrator", {
+      restaurantId: params.restaurantId,
+    });
+    return;
+  }
+
+  const settings = settingsResult.rows[0] as {
+    detractor_alert_enabled: boolean;
+    detractor_alert_phones: string[] | null;
+  };
+
+  const phones = Array.isArray(settings.detractor_alert_phones)
+    ? settings.detractor_alert_phones.filter(Boolean)
+    : [];
+
+  if (!settings.detractor_alert_enabled || phones.length === 0) {
+    console.log("[feedback] alerta de detrator desativado ou sem números", {
+      restaurantId: params.restaurantId,
+      enabled: settings.detractor_alert_enabled,
+      phoneCount: phones.length,
+    });
+    return;
+  }
+
+  const message = buildDetractorAlertMessage({
+    restaurantName: params.restaurantName,
+    customerName: params.customerName,
+    customerPhone: params.customerPhone,
+    nps: params.nps,
+    tableNumber: params.tableNumber,
+    comment: params.comment,
   });
 
-  for (const campaign of campaignsResult.rows as Array<{
-    id: string;
-    title: string;
-    custom_filter?: {
-      notify_phones?: string[];
-      notify_message?: string;
-    } | null;
-  }>) {
-    const notifyPhones = Array.isArray(campaign.custom_filter?.notify_phones)
-      ? campaign.custom_filter?.notify_phones.filter(Boolean)
-      : [];
+  for (const rawPhone of phones) {
+    const phone = normalizePhone(String(rawPhone).replace(/\D/g, ""));
 
-    if (notifyPhones.length === 0) {
-      continue;
-    }
+    const insertResult = await pool.query(
+      `
+      INSERT INTO whatsapp_alert_messages
+      (
+        restaurant_id,
+        customer_id,
+        phone,
+        message,
+        status,
+        campaign_id
+      )
+      VALUES ($1, $2, $3, $4, 'pending', $5)
+      RETURNING id, status, created_at
+      `,
+      [params.restaurantId, params.customerId, phone, message, null]
+    );
 
-    const message = buildDetractorAlertMessage({
-      template: campaign.custom_filter?.notify_message ?? null,
-      restaurantName: params.restaurantName,
-      customerName: params.customerName,
-      nps: params.nps,
-      tableNumber: params.tableNumber,
-      comment: params.comment,
+    console.log("[feedback] alerta de detrator enfileirado", {
+      customerId: params.customerId,
+      notifyPhone: phone,
+      messageId: insertResult.rows[0]?.id ?? null,
+      tableNumber: params.tableNumber ?? null,
     });
-
-    for (const rawPhone of notifyPhones) {
-      const phone = normalizePhone(String(rawPhone).replace(/\D/g, ""));
-
-      const insertResult = await pool.query(
-        `
-        INSERT INTO whatsapp_messages
-        (
-          restaurant_id,
-          customer_id,
-          phone,
-          message,
-          status,
-          campaign_id,
-          scheduled_at
-        )
-        VALUES ($1, $2, $3, $4, 'pending', $5, NOW())
-        RETURNING id, status, scheduled_at
-        `,
-        [params.restaurantId, params.customerId, phone, message, campaign.id]
-      );
-
-      console.log("[feedback] alerta de detrator enfileirado", {
-        campaignId: campaign.id,
-        customerId: params.customerId,
-        notifyPhone: phone,
-        messageId: insertResult.rows[0]?.id ?? null,
-        tableNumber: params.tableNumber ?? null,
-      });
-    }
   }
 }
 
@@ -251,15 +242,21 @@ feedback.post("/", async (c) => {
     if (nps <= 6) {
       response.action = "collect_internal_feedback";
 
-      await enqueueDetractorNotifications({
-        restaurantId: restaurant.id,
-        restaurantName: restaurant.name,
-        customerId: customer.id,
-        customerName: customer.name || "Cliente",
-        nps,
-        tableNumber: table_number || null,
-        comment: comment || null,
-      });
+      const canUseDetractorAlerts =
+        restaurant.plan === "pro" || restaurant.plan === "premium";
+
+      if (canUseDetractorAlerts) {
+        await enqueueDetractorNotifications({
+          restaurantId: restaurant.id,
+          restaurantName: restaurant.name,
+          customerId: customer.id,
+          customerName: customer.name || "Cliente",
+          customerPhone: customer.phone,
+          nps,
+          tableNumber: table_number || null,
+          comment: comment || null,
+        });
+      }
     }
 
     return c.json(response);
