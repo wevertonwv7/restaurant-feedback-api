@@ -152,27 +152,22 @@ feedback.post("/", async (c) => {
             feedback: feedbackSaved,
             action: "thank_you",
         };
-        if (nps >= 9 &&
-            restaurant.google_review_url &&
-            (restaurant.plan === "pro" || restaurant.plan === "premium")) {
+        if (nps >= 9 && restaurant.google_review_url) {
             response.action = "redirect_google_review";
             response.google_review_url = restaurant.google_review_url;
         }
         if (nps <= 6) {
             response.action = "collect_internal_feedback";
-            const canUseDetractorAlerts = restaurant.plan === "pro" || restaurant.plan === "premium";
-            if (canUseDetractorAlerts) {
-                await enqueueDetractorNotifications({
-                    restaurantId: restaurant.id,
-                    restaurantName: restaurant.name,
-                    customerId: customer.id,
-                    customerName: customer.name || "Cliente",
-                    customerPhone: customer.phone,
-                    nps,
-                    tableNumber: table_number || null,
-                    comment: comment || null,
-                });
-            }
+            await enqueueDetractorNotifications({
+                restaurantId: restaurant.id,
+                restaurantName: restaurant.name,
+                customerId: customer.id,
+                customerName: customer.name || "Cliente",
+                customerPhone: customer.phone,
+                nps,
+                tableNumber: table_number || null,
+                comment: comment || null,
+            });
         }
         return c.json(response);
     }

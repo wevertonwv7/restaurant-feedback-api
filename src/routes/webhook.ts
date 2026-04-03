@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import Stripe from "stripe";
 
-import { stripe, stripeWebhookSecret } from "../lib/stripe";
 import { pool } from "../db/client";
+import { stripe, stripeWebhookSecret } from "../lib/stripe";
 
 const app = new Hono();
-const VALID_PLANS = new Set(["basic", "pro", "premium"]);
+const STRIPE_PLAN = "pro";
 
 function getStripeId(
   value:
@@ -32,7 +32,7 @@ async function syncSubscriptionStatus(subscription: Stripe.Subscription) {
   const customerId = getStripeId(subscription.customer);
 
   if (!customerId) {
-    console.error("[stripe:webhook] customer.subscription sem customer válido", {
+    console.error("[stripe:webhook] customer.subscription sem customer valido", {
       subscriptionId: subscription.id,
       status: subscriptionStatus,
     });
@@ -68,16 +68,27 @@ async function syncSubscriptionStatus(subscription: Stripe.Subscription) {
 }
 
 async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
-  console.log("[stripe:webhook] checkout.session.completed payload:", JSON.stringify(session));
+  console.log(
+    "[stripe:webhook] checkout.session.completed payload:",
+    JSON.stringify(session)
+  );
 
-  const subscriptionId = getStripeId(session.subscription as string | Stripe.Subscription | null | undefined);
-  const customerId = getStripeId(session.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined);
+  const subscriptionId = getStripeId(
+    session.subscription as string | Stripe.Subscription | null | undefined
+  );
+  const customerId = getStripeId(
+    session.customer as
+      | string
+      | Stripe.Customer
+      | Stripe.DeletedCustomer
+      | null
+      | undefined
+  );
   const userId = session.metadata?.userId;
   const requestedPlan = session.metadata?.requested_plan;
-  const normalizedPlan =
-    requestedPlan && VALID_PLANS.has(requestedPlan) ? requestedPlan : null;
+  const normalizedPlan = requestedPlan === STRIPE_PLAN ? STRIPE_PLAN : null;
 
-  console.log("[stripe:webhook] checkout.session.completed campos extraídos", {
+  console.log("[stripe:webhook] checkout.session.completed campos extraidos", {
     sessionId: session.id,
     subscriptionId,
     customerId,
@@ -108,7 +119,7 @@ async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
     }
 
     if (!userId) {
-      console.error("[stripe:webhook] metadata.userId não foi enviado na checkout session", {
+      console.error("[stripe:webhook] metadata.userId nao foi enviado na checkout session", {
         sessionId: session.id,
       });
     }
@@ -119,7 +130,7 @@ async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
   console.log("[stripe:webhook] subscriptionId antes de salvar:", subscriptionId);
 
   if (!normalizedPlan) {
-    console.error("[stripe:webhook] metadata.requested_plan ausente ou inválido", {
+    console.error("[stripe:webhook] metadata.requested_plan ausente ou invalido", {
       sessionId: session.id,
       requestedPlan,
       metadata: session.metadata ?? null,
@@ -166,10 +177,10 @@ async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
     restaurant.stripe_subscription_id === subscriptionId &&
     restaurant.stripe_customer_id === customerId &&
     restaurant.subscription_status === "active" &&
-    (!normalizedPlan || restaurant.plan === normalizedPlan);
+    restaurant.plan === STRIPE_PLAN;
 
   if (alreadySaved) {
-    console.log("[stripe:webhook] evento idempotente, assinatura já estava salva", {
+    console.log("[stripe:webhook] evento idempotente, assinatura ja estava salva", {
       restaurantId: restaurant.id,
       userId,
       subscriptionId,
@@ -184,10 +195,10 @@ async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
     SET stripe_subscription_id = $1,
         stripe_customer_id = $2,
         subscription_status = 'active',
-        plan = COALESCE($3, plan)
+        plan = $3
     WHERE id = $4
     `,
-    [subscriptionId, customerId, normalizedPlan, restaurant.id]
+    [subscriptionId, customerId, STRIPE_PLAN, restaurant.id]
   );
 
   const updatedRestaurantResult = await pool.query(
@@ -204,7 +215,7 @@ async function saveCheckoutCompletion(session: Stripe.Checkout.Session) {
     userId,
     subscriptionId,
     customerId,
-    plan: normalizedPlan,
+    plan: STRIPE_PLAN,
     updatedRows: updateResult.rowCount,
     restaurantAfterUpdate: updatedRestaurantResult.rows[0] ?? null,
   });
@@ -241,10 +252,19 @@ app.post("/", async (c) => {
 
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
-        const customerId = getStripeId(invoice.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined);
-        const invoiceSubscription = (invoice as Stripe.Invoice & {
-          subscription?: string | Stripe.Subscription | null;
-        }).subscription;
+        const customerId = getStripeId(
+          invoice.customer as
+            | string
+            | Stripe.Customer
+            | Stripe.DeletedCustomer
+            | null
+            | undefined
+        );
+        const invoiceSubscription = (
+          invoice as Stripe.Invoice & {
+            subscription?: string | Stripe.Subscription | null;
+          }
+        ).subscription;
 
         console.log("[stripe:webhook] invoice.paid payload", {
           invoiceId: invoice.id,
@@ -279,7 +299,14 @@ app.post("/", async (c) => {
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        const customerId = getStripeId(invoice.customer as string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined);
+        const customerId = getStripeId(
+          invoice.customer as
+            | string
+            | Stripe.Customer
+            | Stripe.DeletedCustomer
+            | null
+            | undefined
+        );
 
         if (!customerId) {
           console.error("[stripe:webhook] invoice.payment_failed sem customerId", {

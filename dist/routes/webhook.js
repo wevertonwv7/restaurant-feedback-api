@@ -1,10 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const hono_1 = require("hono");
-const stripe_1 = require("../lib/stripe");
 const client_1 = require("../db/client");
+const stripe_1 = require("../lib/stripe");
 const app = new hono_1.Hono();
-const VALID_PLANS = new Set(["basic", "pro", "premium"]);
+const STRIPE_PLAN = "pro";
 function getStripeId(value) {
     if (!value) {
         return null;
@@ -17,7 +17,7 @@ async function syncSubscriptionStatus(subscription) {
         : subscription.status;
     const customerId = getStripeId(subscription.customer);
     if (!customerId) {
-        console.error("[stripe:webhook] customer.subscription sem customer válido", {
+        console.error("[stripe:webhook] customer.subscription sem customer valido", {
             subscriptionId: subscription.id,
             status: subscriptionStatus,
         });
@@ -51,8 +51,8 @@ async function saveCheckoutCompletion(session) {
     const customerId = getStripeId(session.customer);
     const userId = session.metadata?.userId;
     const requestedPlan = session.metadata?.requested_plan;
-    const normalizedPlan = requestedPlan && VALID_PLANS.has(requestedPlan) ? requestedPlan : null;
-    console.log("[stripe:webhook] checkout.session.completed campos extraídos", {
+    const normalizedPlan = requestedPlan === STRIPE_PLAN ? STRIPE_PLAN : null;
+    console.log("[stripe:webhook] checkout.session.completed campos extraidos", {
         sessionId: session.id,
         subscriptionId,
         customerId,
@@ -79,7 +79,7 @@ async function saveCheckoutCompletion(session) {
             });
         }
         if (!userId) {
-            console.error("[stripe:webhook] metadata.userId não foi enviado na checkout session", {
+            console.error("[stripe:webhook] metadata.userId nao foi enviado na checkout session", {
                 sessionId: session.id,
             });
         }
@@ -87,7 +87,7 @@ async function saveCheckoutCompletion(session) {
     }
     console.log("[stripe:webhook] subscriptionId antes de salvar:", subscriptionId);
     if (!normalizedPlan) {
-        console.error("[stripe:webhook] metadata.requested_plan ausente ou inválido", {
+        console.error("[stripe:webhook] metadata.requested_plan ausente ou invalido", {
             sessionId: session.id,
             requestedPlan,
             metadata: session.metadata ?? null,
@@ -119,9 +119,9 @@ async function saveCheckoutCompletion(session) {
     const alreadySaved = restaurant.stripe_subscription_id === subscriptionId &&
         restaurant.stripe_customer_id === customerId &&
         restaurant.subscription_status === "active" &&
-        (!normalizedPlan || restaurant.plan === normalizedPlan);
+        restaurant.plan === STRIPE_PLAN;
     if (alreadySaved) {
-        console.log("[stripe:webhook] evento idempotente, assinatura já estava salva", {
+        console.log("[stripe:webhook] evento idempotente, assinatura ja estava salva", {
             restaurantId: restaurant.id,
             userId,
             subscriptionId,
@@ -134,9 +134,9 @@ async function saveCheckoutCompletion(session) {
     SET stripe_subscription_id = $1,
         stripe_customer_id = $2,
         subscription_status = 'active',
-        plan = COALESCE($3, plan)
+        plan = $3
     WHERE id = $4
-    `, [subscriptionId, customerId, normalizedPlan, restaurant.id]);
+    `, [subscriptionId, customerId, STRIPE_PLAN, restaurant.id]);
     const updatedRestaurantResult = await client_1.pool.query(`
     SELECT id, plan, stripe_subscription_id, stripe_customer_id, subscription_status
     FROM restaurants
@@ -147,7 +147,7 @@ async function saveCheckoutCompletion(session) {
         userId,
         subscriptionId,
         customerId,
-        plan: normalizedPlan,
+        plan: STRIPE_PLAN,
         updatedRows: updateResult.rowCount,
         restaurantAfterUpdate: updatedRestaurantResult.rows[0] ?? null,
     });

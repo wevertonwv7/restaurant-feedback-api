@@ -1,25 +1,22 @@
 import { Hono } from "hono";
-import { stripe } from "../lib/stripe";
+
 import { pool } from "../db/client";
+import { stripe } from "../lib/stripe";
 import { authMiddleware } from "../middleware/auth";
 import type { Variables } from "../types/hono";
 
 const app = new Hono<{ Variables: Variables }>();
+const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRICE_PRO;
+const STRIPE_PLAN = "pro";
 
 app.use("*", authMiddleware);
-
-const STRIPE_PRICE_IDS = {
-  basic: process.env.STRIPE_PRICE_BASIC,
-  pro: process.env.STRIPE_PRICE_PRO,
-  premium: process.env.STRIPE_PRICE_PREMIUM,
-} as const;
 
 app.post("/create-customer", async (c) => {
   const user = c.get("user");
   const { email } = await c.req.json();
 
   if (!email) {
-    return c.json({ error: "Email Ã© obrigatÃ³rio" }, 400);
+    return c.json({ error: "Email e obrigatorio" }, 400);
   }
 
   const customer = await stripe.customers.create({
@@ -40,19 +37,15 @@ app.post("/create-customer", async (c) => {
 
 app.post("/create-checkout-session", async (c) => {
   const user = c.get("user");
-  const { plan } = await c.req.json() as {
-    plan: "basic" | "pro" | "premium";
-  };
+  const body = await c.req.json().catch(() => ({}));
+  const requestedPlan = body?.plan ?? null;
 
   console.log("[stripe:checkout] iniciando create-checkout-session", {
     userId: user?.id,
     restaurantId: user?.restaurant_id,
-    requestedPlan: plan,
+    requestedPlan,
+    effectivePlan: STRIPE_PLAN,
   });
-
-  if (!plan) {
-    return c.json({ error: "Plano Ã© obrigatÃ³rio" }, 400);
-  }
 
   const result = await pool.query(
     `SELECT r.stripe_customer_id, u.email
@@ -64,11 +57,11 @@ app.post("/create-checkout-session", async (c) => {
   );
 
   if (result.rows.length === 0) {
-    console.error("[stripe:checkout] restaurante não encontrado para checkout", {
+    console.error("[stripe:checkout] restaurante nao encontrado para checkout", {
       userId: user?.id,
       restaurantId: user?.restaurant_id,
     });
-    return c.json({ error: "Restaurante nÃ£o encontrado" }, 404);
+    return c.json({ error: "Restaurante nao encontrado" }, 404);
   }
 
   let customerId = result.rows[0].stripe_customer_id;
@@ -96,26 +89,22 @@ app.post("/create-checkout-session", async (c) => {
     );
   }
 
-  const priceId = STRIPE_PRICE_IDS[plan];
-
-  console.log("[stripe:checkout] preparando sessão Stripe", {
+  console.log("[stripe:checkout] preparando sessao Stripe", {
     customerId,
-    requestedPlan: plan,
-    priceId,
+    requestedPlan,
+    effectivePlan: STRIPE_PLAN,
+    priceId: STRIPE_PRO_PRICE_ID,
   });
 
-  if (!priceId) {
-    console.error("[stripe:checkout] priceId não configurado", {
-      requestedPlan: plan,
-      priceId,
-    });
-    return c.json({ error: "Price do plano nÃ£o configurado" }, 500);
+  if (!STRIPE_PRO_PRICE_ID) {
+    console.error("[stripe:checkout] STRIPE_PRICE_PRO nao configurado");
+    return c.json({ error: "Preco do plano pro nao configurado" }, 500);
   }
 
   const metadata = {
     userId: user.id,
     restaurant_id: user.restaurant_id,
-    requested_plan: plan,
+    requested_plan: STRIPE_PLAN,
   };
 
   console.log("[stripe:checkout] metadata enviada para Stripe", metadata);
@@ -126,7 +115,7 @@ app.post("/create-checkout-session", async (c) => {
     mode: "subscription",
     line_items: [
       {
-        price: priceId,
+        price: STRIPE_PRO_PRICE_ID,
         quantity: 1,
       },
     ],
@@ -135,7 +124,7 @@ app.post("/create-checkout-session", async (c) => {
     metadata,
   });
 
-  console.log("[stripe:checkout] sessão criada", {
+  console.log("[stripe:checkout] sessao criada", {
     sessionId: session.id,
     customerId,
     subscription: session.subscription ?? null,
@@ -159,7 +148,7 @@ app.post("/cancel-subscription", async (c) => {
   );
 
   if (result.rows.length === 0) {
-    return c.json({ error: "Restaurante nÃ£o encontrado" }, 404);
+    return c.json({ error: "Restaurante nao encontrado" }, 404);
   }
 
   const subscriptionId = result.rows[0].stripe_subscription_id as string | null;
@@ -182,7 +171,7 @@ app.post("/cancel-subscription", async (c) => {
     );
 
     return c.json({
-      message: "A assinatura jÃ¡ estava cancelada",
+      message: "A assinatura ja estava cancelada",
       subscriptionId,
       status: "canceled",
     });
@@ -199,11 +188,16 @@ app.post("/cancel-subscription", async (c) => {
       SET subscription_status = $1
       WHERE id = $2
       `,
-      [updatedSubscription.cancel_at_period_end ? "cancel_at_period_end" : updatedSubscription.status, user.restaurant_id]
+      [
+        updatedSubscription.cancel_at_period_end
+          ? "cancel_at_period_end"
+          : updatedSubscription.status,
+        user.restaurant_id,
+      ]
     );
 
     return c.json({
-      message: "Cancelamento agendado para o fim do perÃ­odo",
+      message: "Cancelamento agendado para o fim do periodo",
       subscriptionId: updatedSubscription.id,
       status: updatedSubscription.status,
       cancelAtPeriodEnd: updatedSubscription.cancel_at_period_end,
