@@ -4,9 +4,8 @@ const hono_1 = require("hono");
 const client_1 = require("../db/client");
 const stripe_1 = require("../lib/stripe");
 const auth_1 = require("../middleware/auth");
+const checkout_1 = require("../modules/stripe/checkout");
 const app = new hono_1.Hono();
-const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRICE_PRO;
-const STRIPE_PLAN = "pro";
 app.use("*", auth_1.authMiddleware);
 app.post("/create-customer", async (c) => {
     const user = c.get("user");
@@ -32,75 +31,30 @@ app.post("/create-checkout-session", async (c) => {
         userId: user?.id,
         restaurantId: user?.restaurant_id,
         requestedPlan,
-        effectivePlan: STRIPE_PLAN,
     });
-    const result = await client_1.pool.query(`SELECT r.stripe_customer_id, u.email
-    FROM restaurants r
-    JOIN users u ON u.restaurant_id = r.id
-    WHERE r.id = $1
-    LIMIT 1`, [user.restaurant_id]);
-    if (result.rows.length === 0) {
-        console.error("[stripe:checkout] restaurante nao encontrado para checkout", {
+    const checkoutResult = await (0, checkout_1.createRestaurantCheckoutSession)({
+        restaurantId: user.restaurant_id,
+        userId: user.id,
+        requestedPlan,
+    });
+    if ("error" in checkoutResult) {
+        console.error("[stripe:checkout] erro ao criar sessao", {
             userId: user?.id,
             restaurantId: user?.restaurant_id,
+            requestedPlan,
+            error: checkoutResult.error,
         });
-        return c.json({ error: "Restaurante nao encontrado" }, 404);
+        return c.json({ error: checkoutResult.error }, checkoutResult.status);
     }
-    let customerId = result.rows[0].stripe_customer_id;
-    const email = result.rows[0].email;
-    if (!customerId) {
-        console.log("[stripe:checkout] criando customer Stripe", {
-            restaurantId: user.restaurant_id,
-            email,
-        });
-        const customer = await stripe_1.stripe.customers.create({
-            email,
-        });
-        customerId = customer.id;
-        await client_1.pool.query(`
-      UPDATE restaurants
-      SET stripe_customer_id = $1
-      WHERE id = $2
-      `, [customerId, user.restaurant_id]);
-    }
-    console.log("[stripe:checkout] preparando sessao Stripe", {
-        customerId,
-        requestedPlan,
-        effectivePlan: STRIPE_PLAN,
-        priceId: STRIPE_PRO_PRICE_ID,
-    });
-    if (!STRIPE_PRO_PRICE_ID) {
-        console.error("[stripe:checkout] STRIPE_PRICE_PRO nao configurado");
-        return c.json({ error: "Preco do plano pro nao configurado" }, 500);
-    }
-    const metadata = {
-        userId: user.id,
-        restaurant_id: user.restaurant_id,
-        requested_plan: STRIPE_PLAN,
-    };
-    console.log("[stripe:checkout] metadata enviada para Stripe", metadata);
-    const session = await stripe_1.stripe.checkout.sessions.create({
-        customer: customerId,
-        payment_method_types: ["card"],
-        mode: "subscription",
-        line_items: [
-            {
-                price: STRIPE_PRO_PRICE_ID,
-                quantity: 1,
-            },
-        ],
-        success_url: "https://feedbacks-flow-dev.netlify.app/checkout/success",
-        cancel_url: "https://feedbacks-flow-dev.netlify.app/checkout/cancel",
-        metadata,
-    });
+    console.log("[stripe:checkout] metadata enviada para Stripe", checkoutResult.metadata);
     console.log("[stripe:checkout] sessao criada", {
-        sessionId: session.id,
-        customerId,
-        subscription: session.subscription ?? null,
-        metadata: session.metadata ?? null,
-        url: session.url,
+        sessionId: checkoutResult.session.id,
+        customerId: checkoutResult.customerId,
+        subscription: checkoutResult.session.subscription ?? null,
+        metadata: checkoutResult.session.metadata ?? null,
+        url: checkoutResult.session.url,
     });
-    return c.json({ url: session.url });
+    return c.json({ url: checkoutResult.session.url });
 });
 app.post("/cancel-subscription", async (c) => {
     const user = c.get("user");

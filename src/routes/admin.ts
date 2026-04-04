@@ -4,6 +4,7 @@ import slugify from "slugify";
 
 import { pool } from "../db/client";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
+import { createRestaurantCheckoutSession } from "../modules/stripe/checkout";
 import type { Variables } from "../types/hono";
 
 const admin = new Hono<{ Variables: Variables }>();
@@ -290,6 +291,48 @@ admin.get("/restaurants/:restaurantId/users", async (c) => {
   );
 
   return c.json({ items: result.rows });
+});
+
+admin.post("/restaurants/:restaurantId/create-checkout-session", async (c) => {
+  const restaurantId = c.req.param("restaurantId");
+
+  const ownerResult = await pool.query(
+    `
+    SELECT id
+    FROM users
+    WHERE restaurant_id = $1
+    ORDER BY
+      CASE WHEN role = 'owner' THEN 0 ELSE 1 END,
+      created_at ASC
+    LIMIT 1
+    `,
+    [restaurantId]
+  );
+
+  if (ownerResult.rows.length === 0) {
+    return c.json({ error: "Usuario do restaurante nao encontrado" }, 404);
+  }
+
+  const checkoutResult = await createRestaurantCheckoutSession({
+    restaurantId,
+    userId: ownerResult.rows[0].id as string,
+    requestedPlan: "pro",
+  });
+
+  if ("error" in checkoutResult) {
+    console.error("[admin] erro ao criar checkout session", {
+      restaurantId,
+      error: checkoutResult.error,
+    });
+
+    return c.json({ error: checkoutResult.error }, checkoutResult.status);
+  }
+
+  return c.json({
+    success: true,
+    url: checkoutResult.session.url,
+    sessionId: checkoutResult.session.id,
+  });
 });
 
 admin.post("/restaurants/:restaurantId/users", async (c) => {
