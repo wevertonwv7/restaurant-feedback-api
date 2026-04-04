@@ -10,11 +10,13 @@ me.get("/", authMiddleware, async (c) => {
 
   // query para pegar o plano do restaurante
   const result = await pool.query(
-    `SELECT r.plan, 
+    `SELECT r.plan,
     r.slug AS restaurant_slug,
     r.subscription_status,
     r.stripe_subscription_id,
     u.email,
+    u.name,
+    u.role,
     r.name AS restaurant_name
   FROM restaurants r 
   JOIN users u
@@ -28,6 +30,8 @@ me.get("/", authMiddleware, async (c) => {
   return c.json({
     user: {
       ...user,
+      name: restaurant?.name ?? null,
+      role: restaurant?.role ?? null,
       plan: restaurant?.plan ?? null,
       restaurant_slug: restaurant?.restaurant_slug,
       restaurant_id: user.restaurant_id,

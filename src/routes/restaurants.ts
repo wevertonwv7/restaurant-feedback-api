@@ -1,7 +1,8 @@
-import { Hono } from "hono";
-import { pool } from "../db/client";
 import bcrypt from "bcrypt";
+import { Hono } from "hono";
 import slugify from "slugify";
+
+import { pool } from "../db/client";
 import { authMiddleware } from "../middleware/auth";
 import type { Variables } from "../types/hono";
 
@@ -42,28 +43,26 @@ restaurant.get("/:slug", async (c) => {
   const data = result.rows[0];
 
   if (!data) {
-    return c.json({ error: "Restaurante não encontrado" }, 404);
+    return c.json({ error: "Restaurante nao encontrado" }, 404);
   }
 
   return c.json({
     plan: data.plan,
-    restaurant_name: data.name
+    restaurant_name: data.name,
   });
 });
 
 restaurant.post("/register", async (c) => {
   const body = await c.req.json();
-
   const { name, email, password, google_review_url } = body;
 
   if (!name || !email || !password) {
-    return c.json({ error: "Campos obrigatórios faltando" }, 400);
+    return c.json({ error: "Campos obrigatorios faltando" }, 400);
   }
 
   const client = await pool.connect();
 
   try {
-
     await client.query("BEGIN");
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -82,47 +81,39 @@ restaurant.post("/register", async (c) => {
       slug = `${slug}-${Date.now()}`;
     }
 
-    // cria restaurante
     const restaurantResult = await client.query(
       `INSERT INTO restaurants (name, slug, plan, google_review_url)
-       VALUES ($1,$2,$3,$4)
+       VALUES ($1, $2, $3, $4)
        RETURNING id, name, slug, plan`,
       [name, slug, null, google_review_url || null]
     );
 
-    const restaurant = restaurantResult.rows[0];
+    const createdRestaurant = restaurantResult.rows[0];
 
     console.log("[restaurants.register] restaurante criado", {
-      restaurantId: restaurant.id,
-      slug: restaurant.slug,
-      plan: restaurant.plan,
+      restaurantId: createdRestaurant.id,
+      slug: createdRestaurant.slug,
+      plan: createdRestaurant.plan,
       email,
     });
 
-    // cria usuário dono
     await client.query(
       `INSERT INTO users (restaurant_id, email, password_hash)
-       VALUES ($1,$2,$3)`,
-      [restaurant.id, email, passwordHash]
+       VALUES ($1, $2, $3)`,
+      [createdRestaurant.id, email, passwordHash]
     );
 
     await client.query("COMMIT");
 
     return c.json({
       message: "Restaurante criado com sucesso",
-      restaurant,
+      restaurant: createdRestaurant,
     });
-
   } catch (error) {
-
     await client.query("ROLLBACK");
-
     console.error(error);
 
-    return c.json(
-      { error: "Erro ao criar restaurante" },
-      500
-    );
+    return c.json({ error: "Erro ao criar restaurante" }, 500);
   } finally {
     client.release();
   }
@@ -132,12 +123,8 @@ restaurant.post("/update-plan", authMiddleware, async (c) => {
   const user = c.get("user");
   const { plan } = await c.req.json();
 
-  if (!plan) {
-    return c.json({ error: "Dados inválidos" }, 400);
-  }
-
-  if (!["basic", "pro", "premium"].includes(plan)) {
-    return c.json({ error: "Plano inválido" }, 400);
+  if (plan === undefined) {
+    return c.json({ error: "Dados invalidos" }, 400);
   }
 
   await pool.query(
@@ -170,7 +157,7 @@ restaurant.post("/generate-feedback-link", authMiddleware, async (c) => {
   const restaurantData = result.rows[0];
 
   if (!restaurantData) {
-    return c.json({ error: "Restaurante não encontrado" }, 404);
+    return c.json({ error: "Restaurante nao encontrado" }, 404);
   }
 
   return c.json({

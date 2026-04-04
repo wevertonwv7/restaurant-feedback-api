@@ -18,6 +18,8 @@ const customers_1 = __importDefault(require("./routes/customers"));
 const metrics_1 = __importDefault(require("./routes/metrics"));
 const attendants_1 = __importDefault(require("./routes/attendants"));
 const attendant_ratings_1 = __importDefault(require("./routes/attendant-ratings"));
+const admin_1 = __importDefault(require("./routes/admin"));
+const admin_auth_1 = __importDefault(require("./routes/admin-auth"));
 const reports_1 = __importDefault(require("./routes/reports"));
 const whatsapp_1 = __importDefault(require("./routes/whatsapp"));
 const whatsappSender_1 = require("./workers/whatsappSender");
@@ -25,6 +27,7 @@ const campaigns_1 = __importDefault(require("./routes/campaigns"));
 const campaignWorker_1 = require("./workers/campaignWorker");
 const alertSender_1 = require("./workers/alertSender");
 const billing_1 = __importDefault(require("./routes/billing"));
+const demo_requests_1 = __importDefault(require("./routes/demo-requests"));
 const webhook_1 = __importDefault(require("./routes/webhook"));
 const app = new hono_1.Hono();
 app.use((0, cors_1.cors)({
@@ -55,10 +58,13 @@ app.route("/api/customers", customers_1.default);
 app.route("/api/metrics", metrics_1.default);
 app.route("/api/attendants", attendants_1.default);
 app.route("/api/attendant-ratings", attendant_ratings_1.default);
+app.route("/api/admin/auth", admin_auth_1.default);
+app.route("/api/admin", admin_1.default);
 app.route("/api/reports", reports_1.default);
 app.route("/api/whatsapp", whatsapp_1.default);
 app.route("/api/campaigns", campaigns_1.default);
 app.route("/api/billing", billing_1.default);
+app.route("/api/demo-requests", demo_requests_1.default);
 app.route("/api/webhook", webhook_1.default);
 // 🚀 inicia worker sem quebrar o server
 (0, whatsappSender_1.whatsappWorker)().catch((err) => {

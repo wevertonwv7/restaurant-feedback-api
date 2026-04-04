@@ -3,18 +3,30 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const hono_1 = require("hono");
 const client_1 = require("../db/client");
 const feedback = new hono_1.Hono();
+function normalizeAttendantRating(value) {
+    if (value === null || value === undefined || value === "") {
+        return null;
+    }
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+        return null;
+    }
+    return parsed;
+}
 function normalizePhone(phone) {
     if (phone.startsWith("55"))
         return phone;
     return `55${phone}`;
 }
 function buildDetractorAlertMessage(params) {
+    const mainReason = params.npsReason || params.comment || "nao informado";
     return [
         `Alerta de feedback detrator no restaurante ${params.restaurantName}.`,
         `Cliente: ${params.customerName}.`,
         `WhatsApp: ${params.customerPhone}.`,
         `Nota: ${params.nps}.`,
-        `Comentario: ${params.comment || "nao informado"}.`,
+        `Motivo da nota: ${mainReason}.`,
+        `Comentario livre: ${params.comment || "nao informado"}.`,
         `Mesa: ${params.tableNumber || "nao informada"}.`,
     ].join(" ");
 }
@@ -49,6 +61,7 @@ async function enqueueDetractorNotifications(params) {
         customerPhone: params.customerPhone,
         nps: params.nps,
         tableNumber: params.tableNumber,
+        npsReason: params.npsReason,
         comment: params.comment,
     });
     for (const rawPhone of phones) {
@@ -77,9 +90,14 @@ async function enqueueDetractorNotifications(params) {
 feedback.post("/", async (c) => {
     try {
         const body = await c.req.json();
-        const { restaurant_slug, customer_id, atendimento, qualidade_comida, tempo_espera, custo_beneficio, nps, comment, attendant_id, attendant_rating, attendant_comment, table_number, } = body;
+        const { restaurant_slug, customer_id, atendimento, qualidade_comida, tempo_espera, custo_beneficio, nps, nps_reason, comment, attendant_id, attendant_rating, attendant_comment, table_number, } = body;
+        const normalizedAttendantRating = normalizeAttendantRating(attendant_rating);
         if (!restaurant_slug || !customer_id) {
             return c.json({ error: "restaurant_slug e customer_id sao obrigatorios" }, 400);
+        }
+        if (normalizedAttendantRating !== null &&
+            (normalizedAttendantRating < 0 || normalizedAttendantRating > 5)) {
+            return c.json({ error: "attendant_rating deve estar entre 0 e 5" }, 400);
         }
         const restaurantResult = await client_1.pool.query(`
       SELECT id, name, plan, google_review_url
@@ -111,10 +129,11 @@ feedback.post("/", async (c) => {
         tempo_espera,
         custo_beneficio,
         nps,
+        nps_reason,
         comment,
         table_number
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *
       `, [
             restaurant.id,
@@ -124,11 +143,12 @@ feedback.post("/", async (c) => {
             tempo_espera,
             custo_beneficio,
             nps,
+            nps_reason || null,
             comment,
             table_number || null,
         ]);
         const feedbackSaved = feedbackResult.rows[0];
-        if (attendant_id && attendant_rating) {
+        if (attendant_id && normalizedAttendantRating !== null) {
             await client_1.pool.query(`
         INSERT INTO attendant_ratings
         (
@@ -143,7 +163,7 @@ feedback.post("/", async (c) => {
                 feedbackSaved.id,
                 attendant_id,
                 customer_id,
-                attendant_rating,
+                normalizedAttendantRating,
                 attendant_comment || null,
             ]);
         }
@@ -152,27 +172,23 @@ feedback.post("/", async (c) => {
             feedback: feedbackSaved,
             action: "thank_you",
         };
-        if (nps >= 9 &&
-            restaurant.google_review_url &&
-            (restaurant.plan === "pro" || restaurant.plan === "premium")) {
+        if (nps >= 9 && restaurant.google_review_url) {
             response.action = "redirect_google_review";
             response.google_review_url = restaurant.google_review_url;
         }
         if (nps <= 6) {
             response.action = "collect_internal_feedback";
-            const canUseDetractorAlerts = restaurant.plan === "pro" || restaurant.plan === "premium";
-            if (canUseDetractorAlerts) {
-                await enqueueDetractorNotifications({
-                    restaurantId: restaurant.id,
-                    restaurantName: restaurant.name,
-                    customerId: customer.id,
-                    customerName: customer.name || "Cliente",
-                    customerPhone: customer.phone,
-                    nps,
-                    tableNumber: table_number || null,
-                    comment: comment || null,
-                });
-            }
+            await enqueueDetractorNotifications({
+                restaurantId: restaurant.id,
+                restaurantName: restaurant.name,
+                customerId: customer.id,
+                customerName: customer.name || "Cliente",
+                customerPhone: customer.phone,
+                nps,
+                tableNumber: table_number || null,
+                npsReason: nps_reason || null,
+                comment: comment || null,
+            });
         }
         return c.json(response);
     }

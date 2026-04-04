@@ -15,6 +15,8 @@ import customers from "./routes/customers";
 import metrics from "./routes/metrics";
 import attendants from "./routes/attendants";
 import attendantRatings from "./routes/attendant-ratings"; 
+import admin from "./routes/admin";
+import adminAuth from "./routes/admin-auth";
 import reports from "./routes/reports"; 
 import whatsapp from "./routes/whatsapp";
 import { whatsappWorker } from "./workers/whatsappSender";
@@ -24,6 +26,7 @@ import campaigns from "./routes/campaigns";
 import { campaignWorker } from "./workers/campaignWorker";
 import { alertWorker } from "./workers/alertSender";
 import billing from "./routes/billing";
+import demoRequests from "./routes/demo-requests";
 import webhook from "./routes/webhook";
 
 
@@ -64,10 +67,13 @@ app.route("/api/customers", customers);
 app.route("/api/metrics", metrics);
 app.route("/api/attendants", attendants);
 app.route("/api/attendant-ratings", attendantRatings);
+app.route("/api/admin/auth", adminAuth);
+app.route("/api/admin", admin);
 app.route("/api/reports", reports); 
 app.route("/api/whatsapp", whatsapp);
 app.route("/api/campaigns", campaigns);
 app.route("/api/billing", billing);
+app.route("/api/demo-requests", demoRequests);
 app.route("/api/webhook", webhook);
 
 // 🚀 inicia worker sem quebrar o server
