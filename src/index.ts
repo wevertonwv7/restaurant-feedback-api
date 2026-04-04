@@ -24,6 +24,7 @@ import campaigns from "./routes/campaigns";
 import { campaignWorker } from "./workers/campaignWorker";
 import { alertWorker } from "./workers/alertSender";
 import billing from "./routes/billing";
+import demoRequests from "./routes/demo-requests";
 import webhook from "./routes/webhook";
 
 
@@ -68,6 +69,7 @@ app.route("/api/reports", reports);
 app.route("/api/whatsapp", whatsapp);
 app.route("/api/campaigns", campaigns);
 app.route("/api/billing", billing);
+app.route("/api/demo-requests", demoRequests);
 app.route("/api/webhook", webhook);
 
 // 🚀 inicia worker sem quebrar o server

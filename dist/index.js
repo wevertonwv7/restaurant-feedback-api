@@ -25,6 +25,7 @@ const campaigns_1 = __importDefault(require("./routes/campaigns"));
 const campaignWorker_1 = require("./workers/campaignWorker");
 const alertSender_1 = require("./workers/alertSender");
 const billing_1 = __importDefault(require("./routes/billing"));
+const demo_requests_1 = __importDefault(require("./routes/demo-requests"));
 const webhook_1 = __importDefault(require("./routes/webhook"));
 const app = new hono_1.Hono();
 app.use((0, cors_1.cors)({
@@ -59,6 +60,7 @@ app.route("/api/reports", reports_1.default);
 app.route("/api/whatsapp", whatsapp_1.default);
 app.route("/api/campaigns", campaigns_1.default);
 app.route("/api/billing", billing_1.default);
+app.route("/api/demo-requests", demo_requests_1.default);
 app.route("/api/webhook", webhook_1.default);
 // 🚀 inicia worker sem quebrar o server
 (0, whatsappSender_1.whatsappWorker)().catch((err) => {
