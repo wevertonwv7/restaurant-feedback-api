@@ -16,14 +16,18 @@ function buildDetractorAlertMessage(params: {
   customerPhone: string;
   nps: number;
   tableNumber?: string | null;
+  npsReason?: string | null;
   comment?: string | null;
 }) {
+  const mainReason = params.npsReason || params.comment || "nao informado";
+
   return [
     `Alerta de feedback detrator no restaurante ${params.restaurantName}.`,
     `Cliente: ${params.customerName}.`,
     `WhatsApp: ${params.customerPhone}.`,
     `Nota: ${params.nps}.`,
-    `Comentario: ${params.comment || "nao informado"}.`,
+    `Motivo da nota: ${mainReason}.`,
+    `Comentario livre: ${params.comment || "nao informado"}.`,
     `Mesa: ${params.tableNumber || "nao informada"}.`,
   ].join(" ");
 }
@@ -36,6 +40,7 @@ async function enqueueDetractorNotifications(params: {
   customerPhone: string;
   nps: number;
   tableNumber?: string | null;
+  npsReason?: string | null;
   comment?: string | null;
 }) {
   const settingsResult = await pool.query(
@@ -79,6 +84,7 @@ async function enqueueDetractorNotifications(params: {
     customerPhone: params.customerPhone,
     nps: params.nps,
     tableNumber: params.tableNumber,
+    npsReason: params.npsReason,
     comment: params.comment,
   });
 
@@ -123,6 +129,7 @@ feedback.post("/", async (c) => {
       tempo_espera,
       custo_beneficio,
       nps,
+      nps_reason,
       comment,
       attendant_id,
       attendant_rating,
@@ -180,10 +187,11 @@ feedback.post("/", async (c) => {
         tempo_espera,
         custo_beneficio,
         nps,
+        nps_reason,
         comment,
         table_number
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *
       `,
       [
@@ -194,6 +202,7 @@ feedback.post("/", async (c) => {
         tempo_espera,
         custo_beneficio,
         nps,
+        nps_reason || null,
         comment,
         table_number || null,
       ]
@@ -246,6 +255,7 @@ feedback.post("/", async (c) => {
         customerPhone: customer.phone,
         nps,
         tableNumber: table_number || null,
+        npsReason: nps_reason || null,
         comment: comment || null,
       });
     }

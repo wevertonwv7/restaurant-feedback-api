@@ -9,12 +9,14 @@ function normalizePhone(phone) {
     return `55${phone}`;
 }
 function buildDetractorAlertMessage(params) {
+    const mainReason = params.npsReason || params.comment || "nao informado";
     return [
         `Alerta de feedback detrator no restaurante ${params.restaurantName}.`,
         `Cliente: ${params.customerName}.`,
         `WhatsApp: ${params.customerPhone}.`,
         `Nota: ${params.nps}.`,
-        `Comentario: ${params.comment || "nao informado"}.`,
+        `Motivo da nota: ${mainReason}.`,
+        `Comentario livre: ${params.comment || "nao informado"}.`,
         `Mesa: ${params.tableNumber || "nao informada"}.`,
     ].join(" ");
 }
@@ -49,6 +51,7 @@ async function enqueueDetractorNotifications(params) {
         customerPhone: params.customerPhone,
         nps: params.nps,
         tableNumber: params.tableNumber,
+        npsReason: params.npsReason,
         comment: params.comment,
     });
     for (const rawPhone of phones) {
@@ -77,7 +80,7 @@ async function enqueueDetractorNotifications(params) {
 feedback.post("/", async (c) => {
     try {
         const body = await c.req.json();
-        const { restaurant_slug, customer_id, atendimento, qualidade_comida, tempo_espera, custo_beneficio, nps, comment, attendant_id, attendant_rating, attendant_comment, table_number, } = body;
+        const { restaurant_slug, customer_id, atendimento, qualidade_comida, tempo_espera, custo_beneficio, nps, nps_reason, comment, attendant_id, attendant_rating, attendant_comment, table_number, } = body;
         if (!restaurant_slug || !customer_id) {
             return c.json({ error: "restaurant_slug e customer_id sao obrigatorios" }, 400);
         }
@@ -111,10 +114,11 @@ feedback.post("/", async (c) => {
         tempo_espera,
         custo_beneficio,
         nps,
+        nps_reason,
         comment,
         table_number
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *
       `, [
             restaurant.id,
@@ -124,6 +128,7 @@ feedback.post("/", async (c) => {
             tempo_espera,
             custo_beneficio,
             nps,
+            nps_reason || null,
             comment,
             table_number || null,
         ]);
@@ -166,6 +171,7 @@ feedback.post("/", async (c) => {
                 customerPhone: customer.phone,
                 nps,
                 tableNumber: table_number || null,
+                npsReason: nps_reason || null,
                 comment: comment || null,
             });
         }
