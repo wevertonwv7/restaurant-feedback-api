@@ -5,6 +5,20 @@ import type { Variables } from "../types/hono";
 
 const feedback = new Hono<{ Variables: Variables }>();
 
+function normalizeAttendantRating(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  return parsed;
+}
+
 function normalizePhone(phone: string) {
   if (phone.startsWith("55")) return phone;
   return `55${phone}`;
@@ -136,10 +150,21 @@ feedback.post("/", async (c) => {
       attendant_comment,
       table_number,
     } = body;
+    const normalizedAttendantRating = normalizeAttendantRating(attendant_rating);
 
     if (!restaurant_slug || !customer_id) {
       return c.json(
         { error: "restaurant_slug e customer_id sao obrigatorios" },
+        400
+      );
+    }
+
+    if (
+      normalizedAttendantRating !== null &&
+      (normalizedAttendantRating < 0 || normalizedAttendantRating > 5)
+    ) {
+      return c.json(
+        { error: "attendant_rating deve estar entre 0 e 5" },
         400
       );
     }
@@ -210,7 +235,7 @@ feedback.post("/", async (c) => {
 
     const feedbackSaved = feedbackResult.rows[0];
 
-    if (attendant_id && attendant_rating) {
+    if (attendant_id && normalizedAttendantRating !== null) {
       await pool.query(
         `
         INSERT INTO attendant_ratings
@@ -227,7 +252,7 @@ feedback.post("/", async (c) => {
           feedbackSaved.id,
           attendant_id,
           customer_id,
-          attendant_rating,
+          normalizedAttendantRating,
           attendant_comment || null,
         ]
       );

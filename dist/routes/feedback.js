@@ -3,6 +3,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const hono_1 = require("hono");
 const client_1 = require("../db/client");
 const feedback = new hono_1.Hono();
+function normalizeAttendantRating(value) {
+    if (value === null || value === undefined || value === "") {
+        return null;
+    }
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+        return null;
+    }
+    return parsed;
+}
 function normalizePhone(phone) {
     if (phone.startsWith("55"))
         return phone;
@@ -81,8 +91,13 @@ feedback.post("/", async (c) => {
     try {
         const body = await c.req.json();
         const { restaurant_slug, customer_id, atendimento, qualidade_comida, tempo_espera, custo_beneficio, nps, nps_reason, comment, attendant_id, attendant_rating, attendant_comment, table_number, } = body;
+        const normalizedAttendantRating = normalizeAttendantRating(attendant_rating);
         if (!restaurant_slug || !customer_id) {
             return c.json({ error: "restaurant_slug e customer_id sao obrigatorios" }, 400);
+        }
+        if (normalizedAttendantRating !== null &&
+            (normalizedAttendantRating < 0 || normalizedAttendantRating > 5)) {
+            return c.json({ error: "attendant_rating deve estar entre 0 e 5" }, 400);
         }
         const restaurantResult = await client_1.pool.query(`
       SELECT id, name, plan, google_review_url
@@ -133,7 +148,7 @@ feedback.post("/", async (c) => {
             table_number || null,
         ]);
         const feedbackSaved = feedbackResult.rows[0];
-        if (attendant_id && attendant_rating) {
+        if (attendant_id && normalizedAttendantRating !== null) {
             await client_1.pool.query(`
         INSERT INTO attendant_ratings
         (
@@ -148,7 +163,7 @@ feedback.post("/", async (c) => {
                 feedbackSaved.id,
                 attendant_id,
                 customer_id,
-                attendant_rating,
+                normalizedAttendantRating,
                 attendant_comment || null,
             ]);
         }
