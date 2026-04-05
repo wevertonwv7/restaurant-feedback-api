@@ -31,7 +31,15 @@ const demo_requests_1 = __importDefault(require("./routes/demo-requests"));
 const webhook_1 = __importDefault(require("./routes/webhook"));
 const app = new hono_1.Hono();
 app.use((0, cors_1.cors)({
-    origin: ["https://opiniofeedbacks.com"],
+    origin: [
+        "http://opiniofeedbacks.com",
+        "https://opiniofeedbacks.com",
+        "https://feedbacks-flow-dev.netlify.app",
+        "https://restaurant-feedback-api-dev.up.railway.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8080",
+    ],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
